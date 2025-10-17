@@ -1,0 +1,83 @@
+{
+  "name": "atp-graph-viewer",
+  "private": false,
+  "version": "0.0.0",
+  "module": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs"
+    }
+  },
+  "description": "Functional components build for EBM",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "start": "npm run dev",
+    "dev": "vite --host --open",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint \"src/**/*.tsx*\" --fix",
+    "clean": "rm -rf node_modules && rm -rf dist",
+    "test": "echo \"Error: no test specified\"",
+    "prepare": "husky install"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@fontsource/poppins": "^4.5.10",
+    "@mui/icons-material": "^5.15.18",
+    "@mui/lab": "^5.0.0-alpha.170",
+    "@mui/material": "^5.15.18",
+    "@mui/x-date-pickers": "^8.6.0",
+    "axios": "^1.12.2",
+    "html2pdf.js": "^0.12.1",
+    "react-icons": "^4.7.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "styled-component": "^2.8.0",
+    "react-lottie": "^1.2.10",
+    "react-router-dom": "^7.9.4",
+    "@types/d3": "^7.4.3",
+    "d3": "^7.9.0"
+  },
+    "devDependencies": {
+    "@babel/core": "^7.20.12",
+    "@vitejs/plugin-react-swc": "^3.0.1",
+    "babel-loader": "^8.3.0",
+    "core-js": "^3.27.2",
+    "eslint": "^8.27.0",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "eslint-config-airbnb": "^19.0.4",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-import-resolver-node": "^0.3.6",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-jsx-a11y": "^6.6.1",
+    "eslint-plugin-prettier": "^4.2.1",
+    "eslint-plugin-react": "7.31.8",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "husky": "^8.0.0",
+    "lint-staged": "^13.0.3",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.45.0",
+    "prettier": "latest",
+    "vite": "^4.0.4"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.{js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  },
+  "packageManager": "npm@8.3.0"
+}
