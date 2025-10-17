@@ -12,7 +12,7 @@ interface GraphViewerProps {
     isNavbar?:boolean;
 }
 
-const GraphViewer: React.FC<GraphViewerProps> = ({isNavbar=false}) => {
+const GraphViewer: React.FC<GraphViewerProps> = ({isNavbar=true}) => {
 
   const [active, setActive] = useState("graph");
 

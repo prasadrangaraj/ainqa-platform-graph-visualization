@@ -4,7 +4,7 @@ import GraphViewer from './components/graphViewer';
 function App() {
 
   return (
-      <GraphViewer />
+      <GraphViewer isNavbar={true} />
   )
 }
 
