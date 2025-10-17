@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 import Navbar from "./navbar";
 import GraphEditor from "./graphEditor";
 import GuidelineDb from "./guidelineDb";
-import { useSearchParams } from "react-router-dom";
+import { useGraphViewer, GraphViewerProvider } from "./GraphViewerContext";
 import {
   Button,
 } from "@mui/material";
@@ -12,12 +12,14 @@ interface GraphViewerProps {
     isNavbar?:boolean;
 }
 
-const GraphViewer: React.FC<GraphViewerProps> = ({isNavbar=true}) => {
+const GraphViewerInternal: React.FC<GraphViewerProps> = ({isNavbar=true}) => {
+  const { mode, setMode, clearState } = useGraphViewer();
+  const [active, setActive] = useState(mode);
 
-  const [active, setActive] = useState("graph");
-
-  const [ searchParams, setSearchParams] = useSearchParams();
-  console.log("Search params:", searchParams.toString());
+  // Sync active state with context mode
+  useEffect(() => {
+    setActive(mode);
+  }, [mode]);
 
   return (
     <div
@@ -46,8 +48,8 @@ const GraphViewer: React.FC<GraphViewerProps> = ({isNavbar=true}) => {
           >
             <Button
               onClick={() => {
-                setActive("guidelines")
-                setSearchParams({});
+                setMode("guidelines");
+                clearState();
               }}
               sx={{
                 backgroundColor: active === "guidelines" ? "white" : "#01205C",
@@ -66,8 +68,8 @@ const GraphViewer: React.FC<GraphViewerProps> = ({isNavbar=true}) => {
             </Button>
             <Button
               onClick={() => {
-                setActive("graph")
-                setSearchParams({});
+                setMode("graph");
+                clearState();
               }}
               sx={{
                 backgroundColor: active === "graph" ? "white" : "#01205C",
@@ -125,11 +127,20 @@ const GraphViewer: React.FC<GraphViewerProps> = ({isNavbar=true}) => {
           </Avatar> */}
         </div>
       {active === "graph" && (
-        <GraphEditor isNavbar={isNavbar} setActive={setActive}/>
+        <GraphEditor isNavbar={isNavbar} setActive={setActive as React.Dispatch<React.SetStateAction<string>>} />
       )}
 
       {active === "guidelines" && <GuidelineDb isNavbar={isNavbar} />}
     </div>
+  );
+};
+
+// Main GraphViewer component that includes its own provider
+const GraphViewer: React.FC<GraphViewerProps> = (props) => {
+  return (
+    <GraphViewerProvider>
+      <GraphViewerInternal {...props} />
+    </GraphViewerProvider>
   );
 };
 

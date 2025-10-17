@@ -25,7 +25,7 @@ import SyncIcon from "./icons/syncIcon";
 import WarningIcon from "./icons/warningIcon";
 import OptionBox from "./optionBox";
 import { fetchApi, type Guideline } from "./utils/api";
-import { useSearchParams } from "react-router-dom";
+import { useGraphViewer } from "./GraphViewerContext";
 import loader from "./assets/loader.gif";
 
 interface Node {
@@ -77,7 +77,7 @@ interface GuidelineDetail extends Guideline {
 }
 
 const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { guidelineId, setGuidelineId } = useGraphViewer();
   const [guidelines, setGuidelines] = useState<Guideline[]>([]);
   const [selectedGuideline, setSelectedGuideline] = useState<Guideline | null>(
     null
@@ -142,13 +142,12 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
   }, []);
 
   // guidelineId
-  const guidelineId = searchParams.get("guidelineId");
+  // guidelineId comes from context
 
   // Add ref for the Graph component to call recenter method
   const graphRef = useRef<{ recenter: () => void }>(null);
 
   const getGuidelineDetail = async (guidelineId: string) => {
-    
     try {
     setDetailLoading(true);  
       const result = await fetchApi<GuidelineDetail>(
@@ -208,12 +207,12 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
     if (selected) {
       setSelectedGuideline(selected);
       // Update URL with the selected guideline ID
-      setSearchParams({ guidelineId: selected.id });
+      setGuidelineId(selected.id);
       
     } else {
       setSelectedGuideline(null);
       // Remove the guideline parameter from URL
-      setSearchParams({});
+      setGuidelineId(null);
     }
   };
 
@@ -1051,24 +1050,23 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
   }, []);
 
   // Handle URL parameter changes
-  
-  const memoizedGetGuidelineDetail = useCallback(getGuidelineDetail, [setDetailLoading, setNodes, setLinks, setInitialNodes, setInitialLinks, setHasChanges, setHiddenNodes, setHiddenLinks, setFilteredNodes, setFilteredLinks, resetAllStates, showSnackbar, getDefaultColor]);
+  console.log(guidelineId,'guidelineId')
+  const memoizedGetGuidelineDetail = useCallback(getGuidelineDetail, [setDetailLoading, setGuidelineId, setNodes, setLinks, setInitialNodes, setInitialLinks, setHasChanges, setHiddenNodes, setHiddenLinks, setFilteredNodes, setFilteredLinks, resetAllStates, showSnackbar, getDefaultColor]);
  
   useEffect(() => {
-    const guidelineIdNew = searchParams.get("guidelineId");
-    if (guidelineIdNew && guidelines.length > 0) {
-      const guideline = guidelines.find((g) => g.id === guidelineIdNew);
-      if (
-        guideline &&
-        (!selectedGuideline || selectedGuideline.id !== guidelineIdNew)
-      ) {
+    if (guidelineId && guidelines.length > 0) {
+      const guideline = guidelines.find((g) => g.id === guidelineId);
+      // if (
+      //   guideline &&
+      if (guideline) {
         setSelectedGuideline(guideline);
-        memoizedGetGuidelineDetail(guidelineIdNew);
+        memoizedGetGuidelineDetail(guidelineId);
       }
-    } else if (!guidelineIdNew && selectedGuideline) {
-      setSelectedGuideline(null);
+      else if (!guidelineId && selectedGuideline) {
+        setSelectedGuideline(null);
+      }
     }
-  }, [searchParams, guidelines, selectedGuideline, memoizedGetGuidelineDetail]);
+  }, [guidelineId, setGuidelineId, guidelines, selectedGuideline, memoizedGetGuidelineDetail]);
 
  
   const handleCreateGuideline = async (
@@ -1108,12 +1106,13 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
   };
 
   const handleDeleteClick = () => {
-    setDeleteModalOpen(true); // Open modal when delete clicked
+    setDeleteModalOpen(true);
+    setHasChanges(false) // Open modal when delete clicked
   };
 
   const handleDeleteSuccess = (withGuideline:boolean) => {
     if (withGuideline){
-      setSearchParams({});
+      setGuidelineId(null);
       setNodes([]);
       setLinks([]);
       setSelectedGuideline(null);
@@ -1272,7 +1271,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
               </MenuItem> */}
             </Select>
             {/* {!guidelineId ? ( */}
-            {(filteredLinks.length > 0 || filteredNodes.length > 0) && hasChanges && (
+            {hasChanges ? (
                 <Button
                   onClick={handleSaveData}
                   disabled={saveDataLoading}
@@ -1323,8 +1322,8 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                   </style>
                   Change Data
                 </Button>
-              )}
-            {!hasChanges &&
+              ):
+            
               (<Button
                 sx={{
                   backgroundColor: "#fdebeb",

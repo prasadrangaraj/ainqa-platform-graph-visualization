@@ -25,7 +25,7 @@ import { fetchApi, type Guideline } from "./utils/api";
 import DeleteModal from "./deleteModal";
 import SyncIcon from "./icons/syncIcon";
 import DeleteIcon from "./icons/deleteIcon";
-import { useSearchParams } from "react-router-dom";
+import { useGraphViewer } from "./GraphViewerContext";
 
 interface Node {
   id: string;
@@ -60,8 +60,8 @@ interface GraphEditorProps {
 }
 
 const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
-    const [ searchParams, setSearchParams] = useSearchParams();
-    console.log("Search params:", searchParams.toString());
+    const { mode, guidelineId, setGuidelineId } = useGraphViewer();
+    console.log("Context state - mode:", mode, "guidelineId:", guidelineId);
   const [selectedGuideline, setSelectedGuideline] = useState<Guideline | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
@@ -790,7 +790,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
         showSnackbar("Database synchronized successfully!", "success");
         setShowDrawer(false);
         setErrorDrawerData([]);
-        setSearchParams({ guidelineId: selectedGuideline.id });
+        setGuidelineId(selectedGuideline.id);
         setActive("guidelines");
         resetAllStates();
       } else {

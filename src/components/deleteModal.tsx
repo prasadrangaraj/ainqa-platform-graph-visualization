@@ -3,7 +3,7 @@ import { Box, Modal, Typography, Button, IconButton } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ModalDeleteIcon from "./icons/modalDeleteIcon";
 
-import { useSearchParams } from 'react-router-dom';
+import { useGraphViewer } from './GraphViewerContext';
 import { fetchApi } from './utils/api';
 
 interface DeleteModalProps {
@@ -15,8 +15,7 @@ interface DeleteModalProps {
 }
 
 export default function DeleteModal({ open, setOpen, onDeleteSuccess, showSnackbar, isSingle }: DeleteModalProps) {
-  const [searchParams] = useSearchParams();
-  const guidelineId = searchParams.get('guidelineId');
+  const { guidelineId } = useGraphViewer();
 
   console.log(isSingle,'isSingle')
 
