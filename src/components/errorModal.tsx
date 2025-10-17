@@ -9,9 +9,10 @@ interface ErrorModalProps {
   drawerStyle?:SxProps;
   title?:string;
   showIcon?:boolean;
+  isNavbar:boolean;
 }
 
-const ErrorModal: React.FC<ErrorModalProps> = ({ open, onClose, children,drawerStyle, title, showIcon=true }) => {
+const ErrorModal: React.FC<ErrorModalProps> = ({ open, onClose, children,drawerStyle, title, showIcon=true, isNavbar }) => {
   return (
     <MuiDrawer
           anchor="left"
@@ -28,7 +29,7 @@ const ErrorModal: React.FC<ErrorModalProps> = ({ open, onClose, children,drawerS
               boxShadow: "0px 0px 15px rgba(0,0,0,0.4)",
               pointerEvents: "auto",
               height: "100%",
-              mt: "60px",
+              mt: isNavbar ? "60px" : "0px",
               zIndex: 1111111111111,
               // paddingTop:"80px"
             },
@@ -75,7 +76,7 @@ const ErrorModal: React.FC<ErrorModalProps> = ({ open, onClose, children,drawerS
             <CloseIcon />
           </IconButton>}
         </div>}
-        <Box sx={{ mt: 2, textAlign: "left", overflowY: "auto", maxHeight: "87%","&::-webkit-scrollbar": {
+        <Box sx={{ mt: 2, textAlign: "left", overflowY: "auto", maxHeight: isNavbar ? "87%" : "100%","&::-webkit-scrollbar": {
                   width: "6px", // Smaller width
                 },
                 "&::-webkit-scrollbar-thumb": {

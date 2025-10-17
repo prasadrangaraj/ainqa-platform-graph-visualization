@@ -12,7 +12,7 @@ interface GraphViewerProps {
     isNavbar?:boolean;
 }
 
-const GraphViewer: React.FC<GraphViewerProps> = ({isNavbar=true}) => {
+const GraphViewer: React.FC<GraphViewerProps> = ({isNavbar=false}) => {
 
   const [active, setActive] = useState("graph");
 
@@ -35,7 +35,7 @@ const GraphViewer: React.FC<GraphViewerProps> = ({isNavbar=true}) => {
         // setActive={setActive}
       />}
 
-<div style={{ display: "flex", position:'absolute', width:"300px", top:84, left: 0, right: 0, margin: "auto", justifyContent:'center', zIndex: 1, alignItems: "center", gap: 13 }}>
+<div style={{ display: "flex", position:'absolute', width:"300px", top:isNavbar ? 84 : 26, left: 0, right: 0, margin: "auto", justifyContent:'center', zIndex: 1, alignItems: "center", gap: 13 }}>
           <div
             style={{
               backgroundColor: "#01205C",
@@ -117,10 +117,10 @@ const GraphViewer: React.FC<GraphViewerProps> = ({isNavbar=true}) => {
           </Avatar> */}
         </div>
       {active === "graph" && (
-        <GraphEditor setActive={setActive}/>
+        <GraphEditor isNavbar={isNavbar} setActive={setActive}/>
       )}
 
-      {active === "guidelines" && <GuidelineDb />}
+      {active === "guidelines" && <GuidelineDb isNavbar={isNavbar} />}
     </div>
   );
 };

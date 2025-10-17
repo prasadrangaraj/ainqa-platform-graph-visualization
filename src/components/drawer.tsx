@@ -46,6 +46,7 @@ interface DrawerProps {
   showAddGuidelineForm?: boolean;
   onCreateGuideline?: (name: string, association: string, publicationYear: string) => void;
   onCloseGuidelineForm?: () => void;
+  isNavbar:boolean;
   // onCloseDetails?: () => void;
   // onCloseFilter?: () => void;
 }
@@ -65,6 +66,7 @@ const DrawerComponent: React.FC<DrawerProps> = ({
   showAddGuidelineForm = false,
   onCreateGuideline,
   onCloseGuidelineForm,
+  isNavbar,
   // onCloseFilter,
   // onCloseDetails
 }) => {
@@ -793,7 +795,7 @@ const DrawerComponent: React.FC<DrawerProps> = ({
           backgroundColor: "#ffffff",
           boxShadow: "0px 0px 15px rgba(0,0,0,0.4)",
           pointerEvents: "auto",
-          paddingTop:"80px"
+          paddingTop:isNavbar ? "80px" : "10px"
         },
       }}
       sx={{

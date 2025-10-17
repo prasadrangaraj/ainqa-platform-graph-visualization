@@ -56,9 +56,10 @@ interface Link {
 
 interface GraphEditorProps {
   setActive: React.Dispatch<React.SetStateAction<string>>;
+  isNavbar:boolean;
 }
 
-const GraphEditor: React.FC<GraphEditorProps> = ({setActive}) => {
+const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     const [ searchParams, setSearchParams] = useSearchParams();
     console.log("Search params:", searchParams.toString());
   const [selectedGuideline, setSelectedGuideline] = useState<Guideline | null>(null);
@@ -900,6 +901,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive}) => {
       <DeleteModal open={deleteModalOpen} setOpen={setDeleteModalOpen} />
       <DrawerComponent
         open={showAddGuidelineForm}
+        isNavbar={isNavbar}
         onClose={() => setShowAddGuidelineForm(false)}
         showAddGuidelineForm={showAddGuidelineForm}
         onCreateGuideline={handleCreateGuideline}
@@ -1085,6 +1087,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive}) => {
           <ErrorModal
           drawerStyle={{minWidth:"100px", overflow:"hidden", mt:"0px", width:260}}
             open={openSideDrawer}
+            isNavbar={isNavbar}
             showIcon={false}
             onClose={() => setOpenSideDrawer(false)}
           >
@@ -1131,6 +1134,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive}) => {
               onClose={resetAllStates}
               drawerData={getDrawerData()}
               onSaveEdit={handleSaveEdit}
+              isNavbar={isNavbar}
               onCancelEdit={handleCancelEdit}
               onFilter={filterGraph}
               searchTerm={searchTerm}
@@ -1142,6 +1146,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive}) => {
           {showErrorComponent && (
             <ErrorModal
               open={showErrorComponent}
+              isNavbar={isNavbar}
               drawerStyle={{width:360}}
               onClose={() => setShowErrorComponent(false)}
             >

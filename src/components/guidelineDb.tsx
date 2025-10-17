@@ -73,9 +73,10 @@ interface GuidelineDetail extends Guideline {
     reference?: string;
     text?: string;
   }>;
+  
 }
 
-const GuidelineDb = () => {
+const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [guidelines, setGuidelines] = useState<Guideline[]>([]);
   const [selectedGuideline, setSelectedGuideline] = useState<Guideline | null>(
@@ -1171,6 +1172,7 @@ const GuidelineDb = () => {
         <DeleteModal isSingle={(filteredLinks.length > 0 || filteredNodes.length > 0) ? true : false} open={deleteModalOpen} onDeleteSuccess={handleDeleteSuccess} setOpen={setDeleteModalOpen} showSnackbar={showSnackbar} />
         <DrawerComponent
           open={showAddGuidelineForm}
+          isNavbar={isNavbar}
           onClose={() => setShowAddGuidelineForm(false)}
           showAddGuidelineForm={showAddGuidelineForm}
           onCreateGuideline={handleCreateGuideline}
@@ -1361,6 +1363,7 @@ const GuidelineDb = () => {
           </Box>
           <ErrorModal
           drawerStyle={{minWidth:"100px", width:260}}
+          isNavbar={isNavbar}
             open={openSideDrawer}
             showIcon={true}
             onClose={() => setOpenSideDrawer(false)}
@@ -1401,6 +1404,7 @@ const GuidelineDb = () => {
           </Box>
 
           <DrawerComponent
+          isNavbar={isNavbar}
             open={!!selectedElement || showFilter || addingNode}
             onClose={resetAllStates}
             drawerData={getDrawerData()}
@@ -1415,6 +1419,7 @@ const GuidelineDb = () => {
         </Box>
         {showErrorComponent && (
           <ErrorModal
+          isNavbar={isNavbar}
             open={showErrorComponent}
             drawerStyle={{width:360}}
             onClose={() => setShowErrorComponent(false)}
