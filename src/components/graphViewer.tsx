@@ -56,6 +56,10 @@ const GraphViewer: React.FC<GraphViewerProps> = ({isNavbar=true}) => {
                 px: 2.5,
                 borderRadius: "8px",
                 height: "35px",
+                "&:hover": {
+                  backgroundColor: active === "guidelines" ? "#f5f5f5" : "#01205C",
+                  color: active === "guidelines" ? "#01205C" : "white",
+                },
               }}
             >
               Knowledge Base
@@ -72,6 +76,10 @@ const GraphViewer: React.FC<GraphViewerProps> = ({isNavbar=true}) => {
                 px: 2.5,
                 borderRadius: "8px",
                 height: "35px",
+                "&:hover": {
+                  backgroundColor: active === "graph" ? "#f5f5f5" : "#01205C",
+                  color: active === "graph" ? "#01205C" : "white",
+                },
               }}
             >
               Graph Editor

@@ -1,11 +1,13 @@
 {
   "name": "atp-graph-viewer",
   "private": false,
-  "version": "0.0.0",
-  "module": "./dist/index.mjs",
+  "version": "0.0.1",
+  "type": "module",
+  "module": "./dist/index.es.js",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs"
+      "module": "./dist/index.es.js",
+      "import": "./dist/index.es.js"
     }
   },
   "description": "Graph viewer",
@@ -26,24 +28,21 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
-    "@fontsource/poppins": "^4.5.10",
     "@mui/icons-material": "^5.15.18",
     "@mui/material": "^5.15.18",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
     "styled-component": "^2.8.0",
     "react-router-dom": "^7.9.4",
     "@types/d3": "^7.4.3",
     "d3": "^7.9.0"
   },
-    "devDependencies": {
+  "devDependencies": {
     "@babel/core": "^7.20.12",
     "@vitejs/plugin-react-swc": "^3.0.1",
     "babel-loader": "^8.3.0",
     "core-js": "^3.27.2",
     "eslint": "^8.27.0",
-    "@types/react": "^19.1.16",
-    "@types/react-dom": "^19.1.9",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.1",
     "eslint-config-airbnb": "^19.0.4",
     "eslint-config-prettier": "^8.3.0",
     "eslint-import-resolver-node": "^0.3.6",
@@ -57,10 +56,12 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.45.0",
     "prettier": "latest",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "vite": "^4.0.4"
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
   "husky": {
     "hooks": {

@@ -19,7 +19,7 @@ NEW_VERSION=$(npm version "$VERSION_TYPE" --no-git-tag-version)
 git add .
 
 
-git commit -m "Release: EBM AI Assistant package $NEW_VERSION" # Simple and project-related commit message
+git commit -m "Release: ATP Graph Viewer package $NEW_VERSION" # Simple and project-related commit message
 
 npm run build
 
