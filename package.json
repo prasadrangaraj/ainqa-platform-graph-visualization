@@ -36,6 +36,10 @@
     "d3": "^7.9.0",
     "styled-component": "^2.8.0"
   },
+  "peerDependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
   "devDependencies": {
     "@babel/core": "^7.20.12",
     "@types/react": "^18.3.1",
