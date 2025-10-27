@@ -30,10 +30,10 @@ async function fetchApi<T>(endpoint: string, method: string, payload?: unknown):
 
   const headers: HeadersInit = {
     "Content-Type": "application/json",
-    "X-Neo4j-Uri": "neo4j+s://7c28c8d5.databases.neo4j.io",
-    "X-Neo4j-Username": "neo4j",
-    "X-Neo4j-Password": "CiQJ61ybaoGALqWZ7orpo-DGcvNF8uAFCAnGMTXFZ1k",
-    "X-Neo4j-Database": "neo4j",
+    // "X-Neo4j-Uri": "neo4j+s://7c28c8d5.databases.neo4j.io",
+    // "X-Neo4j-Username": "neo4j",
+    // "X-Neo4j-Password": "CiQJ61ybaoGALqWZ7orpo-DGcvNF8uAFCAnGMTXFZ1k",
+    // "X-Neo4j-Database": "neo4j",
   };
 
     headers["Authorization"] = `Bearer emb-Bjmo1dtrzSqbTNJY2QJgMbbNfNJKdD89o4I5SfG`;
