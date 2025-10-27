@@ -27,6 +27,7 @@ import OptionBox from "./optionBox";
 import { fetchApi, type Guideline } from "./utils/api";
 import { useGraphViewer } from "./GraphViewerContext";
 import loader from "./assets/loader.gif";
+import Neo4jGraph from "./neo4jGraph";
 
 interface Node {
   id: string;
@@ -1211,6 +1212,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
               }}
               inputProps={{ "aria-label": "Select guideline" }}
               sx={{
+                zIndex:1111,
                 minWidth: 300,
                 height: 38,
                 backgroundColor: "white",
@@ -1291,6 +1293,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                     "&:hover": {
                       backgroundColor: "#01205C",
                     },
+                    zIndex:1111,
                   }}
                   size="small"
                 >
@@ -1334,6 +1337,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                   mt:"-4px",
                   px: 2,
                   textTransform: "none",
+                  zIndex:1111,
                 }}
                 size="small"
                 onClick={handleDeleteClick} // Open delete modal
@@ -1390,7 +1394,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
           </ErrorModal>
 
           <Box sx={{ flex: 1, height: "100%" }}>
-            <Graph
+            {/* <Graph
               ref={graphRef}
               nodes={filteredNodes}
               links={filteredLinks}
@@ -1399,7 +1403,17 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
               onAddEdge={handleAddEdge}
               addingEdge={addingEdge}
               selectedElement={selectedElement || undefined}
-            />
+            /> */}
+            <Neo4jGraph
+            ref={graphRef}
+            nodes={filteredNodes}
+            links={filteredLinks}
+            onNodeClick={handleNodeClick}
+            onlinkClick={handleLinkClick}
+            onAddlink={handleAddEdge}
+            addinglink={addingEdge}
+            selectedElement={selectedElement || undefined}
+          />
           </Box>
 
           <DrawerComponent
