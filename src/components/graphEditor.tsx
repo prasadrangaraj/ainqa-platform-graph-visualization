@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Box, Button, IconButton, MenuItem, Select, Typography } from "@mui/material";
 import CustomSnackbar from "./snackbar";
-import Graph from "./Graph";
+// import Graph from "./Graph";
 import OptionBox from "./optionBox";
 import DrawerComponent, { type DrawerData } from "./drawer";
 import CloseIcon from "@mui/icons-material/Close";
@@ -26,6 +26,7 @@ import DeleteModal from "./deleteModal";
 import SyncIcon from "./icons/syncIcon";
 import DeleteIcon from "./icons/deleteIcon";
 import { useGraphViewer } from "./GraphViewerContext";
+import Neo4jGraph, { type GraphHandle } from "./neo4jGraph";
 
 interface Node {
   id: string;
@@ -60,8 +61,8 @@ interface GraphEditorProps {
 }
 
 const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
-    const { mode, guidelineId, setGuidelineId } = useGraphViewer();
-    console.log("Context state - mode:", mode, "guidelineId:", guidelineId);
+  const { mode, guidelineId, setGuidelineId } = useGraphViewer();
+  console.log("Context state - mode:", mode, "guidelineId:", guidelineId);
   const [selectedGuideline, setSelectedGuideline] = useState<Guideline | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
@@ -85,7 +86,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
 
   const [saveDataLoading, setSaveDataLoading] = useState(false);
 
-  const [openSideDrawer, setOpenSideDrawer] = useState(false)
+ const [openSideDrawer, setOpenSideDrawer] = useState(false)
 
   // Add ref for the Graph component to call recenter method
   const graphRef = useRef<{ recenter: () => void }>(null);
@@ -231,7 +232,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
 
   const filterByCategory = (category: string) => {
     resetAllStates();
-    if (category === "all") {
+    if (category === "nodes") {
       setFilteredNodes(nodes.filter((n) => !hiddenNodes.has(n.id)));
       setFilteredLinks(
         links.filter(
@@ -241,7 +242,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
             !hiddenNodes.has(l.destination_node)
         )
       );
-    } else if (category === "nodes") {
+    } else if (category === "all") {
       setFilteredNodes(nodes.filter((n) => !hiddenNodes.has(n.id)));
       setFilteredLinks([]);
     }
@@ -746,7 +747,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     },
   ];
 
-    const handleSaveData = async () => {
+  const handleSaveData = async () => {
     if (!selectedGuideline?.id) {
       showSnackbar("Please select a guideline first", "warning");
       return;
@@ -798,7 +799,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       }
     } catch (error: unknown) {
       const validationErrors =
-    (error as { validationErrors?: never })?.validationErrors || [];
+        (error as { validationErrors?: never })?.validationErrors || [];
       console.log("Error syncing database:", error);
       console.log("Data:", error);
       setShowDrawer(true);
@@ -809,94 +810,94 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     }
   };
 
-    const [guidelines, setGuidelines] = useState<Guideline[]>([]);
+      const [guidelines, setGuidelines] = useState<Guideline[]>([]);
   
     // Control delete modal open
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const getAndSetGuidelines = async () => {
-      try {
-        const result = await fetchApi<Guideline[]>("/guidelines", "GET");
-        if (result.success && result.data.length > 0) {
-          setGuidelines(result.data); // Select the first guideline object
-        }
-      } catch (error) {
-        console.error("Error fetching guidelines:", error);
+  const getAndSetGuidelines = async () => {
+    try {
+      const result = await fetchApi<Guideline[]>("/guidelines", "GET");
+      if (result.success && result.data.length > 0) {
+        setGuidelines(result.data); // Select the first guideline object
       }
+    } catch (error) {
+      console.error("Error fetching guidelines:", error);
+    }
+  };
+  useEffect(() => {
+    getAndSetGuidelines();
+  }, []);
+
+      const [showAddGuidelineForm, setShowAddGuidelineForm] = useState(false);
+
+  const handleAddGuidelineClick = () => {
+    setShowAddGuidelineForm(true);
+  };
+
+  const handleCreateGuideline = async (
+    newGuidelineName: string,
+    newGuidelineAssociation: string,
+    newGuidelinePublicationYear: string
+  ) => {
+    if (
+      !newGuidelineName ||
+      !newGuidelineAssociation ||
+      !newGuidelinePublicationYear
+    ) {
+      showSnackbar("Please fill all fields.", "warning");
+      return;
+    }
+
+    const payload = {
+      name: newGuidelineName,
+      version: 1,
+      association: newGuidelineAssociation,
+      publication_year: newGuidelinePublicationYear,
     };
-    useEffect(() => {
-      getAndSetGuidelines();
-    }, []);
-  
-    const [showAddGuidelineForm, setShowAddGuidelineForm] = useState(false);
-  
-    const handleAddGuidelineClick = () => {
-      setShowAddGuidelineForm(true);
-    };
-  
-    const handleCreateGuideline = async (
-      newGuidelineName: string,
-      newGuidelineAssociation: string,
-      newGuidelinePublicationYear: string
-    ) => {
-      if (
-        !newGuidelineName ||
-        !newGuidelineAssociation ||
-        !newGuidelinePublicationYear
-      ) {
-        showSnackbar("Please fill all fields.", "warning");
-        return;
-      }
-  
-      const payload = {
-        name: newGuidelineName,
-        version: 1,
-        association: newGuidelineAssociation,
-        publication_year: newGuidelinePublicationYear,
-      };
-  
-      try {
-        const result = await fetchApi<Guideline>("/guidelines", "POST", payload);
-        if (result.success) {
-          showSnackbar("Guideline added successfully!", "success");
-          getAndSetGuidelines(); // Refresh the list
-          setShowAddGuidelineForm(false); // Hide the form
-        } else {
-          showSnackbar(`Failed to add guideline: ${result.message}`, "error");
-        }
-      } catch (error) {
-        console.error("Error creating guideline:", error);
-        showSnackbar("Error creating guideline.", "error");
-      }
-    };
-  
-  
-  
-    const handleChange = (event: React.ChangeEvent<{ value: unknown }>) => {
-      const value = event.target.value as string;
-      const selected = guidelines.find((g) => g.name === value);
-      if (selected) {
-        setSelectedGuideline(selected);
-        // onGuidelineSelect?.(selected || null);
+
+    try {
+      const result = await fetchApi<Guideline>("/guidelines", "POST", payload);
+      if (result.success) {
+        showSnackbar("Guideline added successfully!", "success");
+        getAndSetGuidelines(); // Refresh the list
+        setShowAddGuidelineForm(false); // Hide the form
       } else {
-        setSelectedGuideline(null);
-        // onGuidelineSelect?.(null);
+        showSnackbar(`Failed to add guideline: ${result.message}`, "error");
       }
-    };
-  
-    const handleDeleteClick = () => {
-      setDeleteModalOpen(true); // Open modal when delete clicked
-    };
-  
+    } catch (error) {
+      console.error("Error creating guideline:", error);
+      showSnackbar("Error creating guideline.", "error");
+    }
+  };
+
+
+
+  const handleChange = (event: React.ChangeEvent<{ value: unknown }>) => {
+    const value = event.target.value as string;
+    const selected = guidelines.find((g) => g.name === value);
+    if (selected) {
+      setSelectedGuideline(selected);
+      // onGuidelineSelect?.(selected || null);
+    } else {
+      setSelectedGuideline(null);
+      // onGuidelineSelect?.(null);
+    }
+  };
+
+  const handleDeleteClick = () => {
+    setDeleteModalOpen(true); // Open modal when delete clicked
+  };
+
 
   return (
-        <>
+    <>
       <CustomSnackbar
         open={snackbar.open}
         message={snackbar.message}
         severity={snackbar.severity}
         onClose={handleSnackbarClose}
       />
-      
+
       {/* ---------- DELETE MODAL ---------- */}
       <DeleteModal open={deleteModalOpen} setOpen={setDeleteModalOpen} />
       <DrawerComponent
@@ -907,22 +908,22 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
         onCreateGuideline={handleCreateGuideline}
         onCloseGuidelineForm={() => setShowAddGuidelineForm(false)}
       />
-          <Box
-            sx={{
-              flex: 1,
-              display: "flex",
-              position: "relative",
-              backgroundColor: "white",
-              overflow: "hidden",
-            }}
-          >
-            <div
+      <Box
+        sx={{
+          flex: 1,
+          display: "flex",
+          position: "relative",
+          backgroundColor: "white",
+          overflow: "hidden",
+        }}
+      >
+        <div
           style={{
             position: "absolute",
             top: 30,
             left: openSideDrawer ? 278 : 210,
               // zIndex:100,
-              width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "63%" : openSideDrawer ? "79%" :  "83%",
+            width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "63%" : openSideDrawer ? "79%" :  "83%",
             display: "flex",
             justifyContent: "space-between",
           }}
@@ -941,6 +942,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
             }}
             inputProps={{ "aria-label": "Select guideline" }}
             sx={{
+              zIndex: 1111,
               minWidth: 300,
               height: 38,
               backgroundColor: "white",
@@ -1019,7 +1021,8 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
                 },
                 "&:hover": {
                   backgroundColor: "#01205C",
-                }
+                },
+                zIndex: 1111,
               }}
               size="small"
             >
@@ -1045,7 +1048,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
               </style>
               Save Graph
             </Button>
-            }
+          }
         
           {deleteModalOpen &&
             <Button
@@ -1057,6 +1060,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
                 padding: 1,
                 px: 2,
                 textTransform: "none",
+                zIndex:1111,
               }}
               size="small"
               onClick={handleDeleteClick} // Open delete modal
@@ -1069,55 +1073,55 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
 
         <Box
           onClick={() => setOpenSideDrawer(true)}
-            sx={{
-              position: "absolute",
-              cursor:"pointer",
-              top: 20,
-              left: 20,
-              zIndex: 10,
-              display: "flex",
-              flexDirection: "column",
-              backgroundColor:"#01205C",
-              padding:'6px',
-              borderRadius:'6px'
-            }}
-          >
+          sx={{
+            position: "absolute",
+            cursor:"pointer",
+            top: 20,
+            left: 20,
+            zIndex: 10,
+            display: "flex",
+            flexDirection: "column",
+            backgroundColor:"#01205C",
+            padding:'6px',
+            borderRadius:'6px'
+          }}
+        >
           <Menu sx={{color:"#ffff"}}/>
-          </Box>
-          <ErrorModal
+        </Box>
+        <ErrorModal
           drawerStyle={{minWidth:"100px", overflow:"hidden", mt:"0px", width:260}}
-            open={openSideDrawer}
-            isNavbar={isNavbar}
-            showIcon={false}
-            onClose={() => setOpenSideDrawer(false)}
-          >
-            
-            <Box
-              sx={{
-                // position: "absolute",
+          open={openSideDrawer}
+          isNavbar={isNavbar}
+          showIcon={false}
+          onClose={() => setOpenSideDrawer(false)}
+        >
+
+          <Box
+            sx={{
+              // position: "absolute",
                 // top: 20,
                 // left: 20,
                 // zIndex: 10,
-                display: "flex",
-                flexDirection: "column",
-                gap: 2,
-                p:"10px",
-                position:"relative",
-              }}
-            >
-              <IconButton sx={{position:"absolute", right:0, top:0}} onClick={() => setOpenSideDrawer(false)}><CloseIcon /></IconButton>
-              {showDrawer && <OptionBox buttons={ErrorButton} title={""} />}
-              <OptionBox title="Json Graph" buttons={jsonGraphButtons} />
-              <OptionBox
-                title="Editable Options"
-                buttons={editableOptionsButtons}
-              />
-              
-            </Box>
-            </ErrorModal>
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+              p:"10px",
+              position:"relative",
+            }}
+          >
+            <IconButton sx={{position:"absolute", right:0, top:0}} onClick={() => setOpenSideDrawer(false)}><CloseIcon /></IconButton>
+            {showDrawer && <OptionBox buttons={ErrorButton} title={""} />}
+            <OptionBox title="Json Graph" buttons={jsonGraphButtons} />
+            <OptionBox
+              title="Editable Options"
+              buttons={editableOptionsButtons}
+            />
 
-            <Box sx={{ flex: 1, height: "100%" }}>
-              <Graph
+          </Box>
+        </ErrorModal>
+
+        <Box sx={{ flex: 1, height: "100%" }}>
+          {/* <Graph
                 ref={graphRef}
                 nodes={filteredNodes}
                 links={filteredLinks}
@@ -1126,73 +1130,83 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
                 onAddEdge={handleAddEdge}
                 addingEdge={addingEdge}
                 selectedElement={selectedElement || undefined}
-              />
-            </Box>
+              /> */}
+          <Neo4jGraph
+            ref={graphRef}
+            nodes={filteredNodes}
+            links={filteredLinks}
+            onNodeClick={handleNodeClick}
+            onlinkClick={handleLinkClick}
+            onAddlink={handleAddEdge}
+            addinglink={addingEdge}
+            selectedElement={selectedElement || undefined}
+          />
+        </Box>
 
-            <DrawerComponent
-              open={!!selectedElement || showFilter || addingNode}
-              onClose={resetAllStates}
-              drawerData={getDrawerData()}
-              onSaveEdit={handleSaveEdit}
-              isNavbar={isNavbar}
-              onCancelEdit={handleCancelEdit}
-              onFilter={filterGraph}
-              searchTerm={searchTerm}
-              onSearchTermChange={setSearchTerm}
-              isAddingNode={addingNode}
-              showFilter={showFilter}
-            />
+        <DrawerComponent
+          open={!!selectedElement || showFilter || addingNode}
+          onClose={resetAllStates}
+          drawerData={getDrawerData()}
+          onSaveEdit={handleSaveEdit}
+          isNavbar={isNavbar}
+          onCancelEdit={handleCancelEdit}
+          onFilter={filterGraph}
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          isAddingNode={addingNode}
+          showFilter={showFilter}
+        />
+      </Box>
+      {showErrorComponent && (
+        <ErrorModal
+          open={showErrorComponent}
+          isNavbar={isNavbar}
+          drawerStyle={{width:360}}
+          onClose={() => setShowErrorComponent(false)}
+        >
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column',
+            gap: 1,
+            maxHeight: 'calc(100vh - 200px)',
+            overflowY: 'auto',
+            '&::-webkit-scrollbar': {
+              width: '8px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: '#f1f1f1',
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: '#888',
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb:hover': {
+              background: '#555',
+            },
+          }}>
+            {errorDrawerData.map((error, index) => (
+              <Typography 
+                key={index} 
+                sx={{ 
+                  backgroundColor: '#fff3f3',
+                  padding: 1,
+                  borderRadius: 1,
+                  marginBottom: 1.5,
+                  whiteSpace: "pre-line",
+                  border: '1px solid #ffcdd2'
+                }}
+              >
+                {error}
+              </Typography>
+            ))}
+            {!errorDrawerData && (
+              <Typography>An unknown error occurred.</Typography>
+            )}
           </Box>
-          {showErrorComponent && (
-            <ErrorModal
-              open={showErrorComponent}
-              isNavbar={isNavbar}
-              drawerStyle={{width:360}}
-              onClose={() => setShowErrorComponent(false)}
-            >
-              <Box sx={{ 
-                display: 'flex', 
-                flexDirection: 'column',
-                gap: 1,
-                maxHeight: 'calc(100vh - 200px)',
-                overflowY: 'auto',
-                '&::-webkit-scrollbar': {
-                  width: '8px',
-                },
-                '&::-webkit-scrollbar-track': {
-                  background: '#f1f1f1',
-                  borderRadius: '4px',
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  background: '#888',
-                  borderRadius: '4px',
-                },
-                '&::-webkit-scrollbar-thumb:hover': {
-                  background: '#555',
-                },
-              }}>
-                {errorDrawerData.map((error, index) => (
-                  <Typography 
-                    key={index} 
-                    sx={{ 
-                      backgroundColor: '#fff3f3',
-                      padding: 1,
-                      borderRadius: 1,
-                      marginBottom: 1.5,
-                      whiteSpace: "pre-line",
-                      border: '1px solid #ffcdd2'
-                    }}
-                  >
-                    {error}
-                  </Typography>
-                ))}
-                {!errorDrawerData && (
-                  <Typography>An unknown error occurred.</Typography>
-                )}
-              </Box>
-            </ErrorModal>
-          )}
-        </>
+        </ErrorModal>
+      )}
+    </>
   );
 };
 
