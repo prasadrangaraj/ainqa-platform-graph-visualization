@@ -396,7 +396,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
 
   const filterByCategory = (category: string) => {
     resetAllStates();
-    if (category === "all") {
+    if (category === "nodes") {
       setFilteredNodes(nodes.filter((n) => !hiddenNodes.has(n.id)));
       setFilteredLinks(
         links.filter(
@@ -406,7 +406,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
             !hiddenNodes.has(l.destination_node)
         )
       );
-    } else if (category === "nodes") {
+    } else if (category === "all") {
       setFilteredNodes(nodes.filter((n) => !hiddenNodes.has(n.id)));
       setFilteredLinks([]);
     }
