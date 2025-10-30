@@ -18,13 +18,12 @@ import CustomSnackbar from "./snackbar";
 import DeleteModal from "./deleteModal";
 import DrawerComponent, { type DrawerData } from "./drawer";
 import ErrorModal from "./errorModal";
-import Graph from "./Graph";
 import DeleteIcon from "./icons/deleteIcon";
 import SearchFolderImage from "./icons/searchFolderImage";
 import SyncIcon from "./icons/syncIcon";
 import WarningIcon from "./icons/warningIcon";
 import OptionBox from "./optionBox";
-import { fetchApi, type Guideline } from "./utils/api";
+import { fetchApi, type Guideline, type Neo4jDatabase } from "./utils/api";
 import { useGraphViewer } from "./GraphViewerContext";
 import loader from "./assets/loader.gif";
 import Neo4jGraph from "./neo4jGraph";
@@ -78,8 +77,21 @@ interface GuidelineDetail extends Guideline {
 }
 
 const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
-  const { guidelineId, setGuidelineId } = useGraphViewer();
+  const { guidelineId, setGuidelineId, databases, setDatabases, selectedDatabase, setSelectedDatabase } = useGraphViewer();
   const [guidelines, setGuidelines] = useState<Guideline[]>([]);
+  const[apiLoader, setApiLoader] = useState(false)
+
+  const handleDatabaseChange = (event: React.ChangeEvent<{ value: unknown }>) => {
+    setGuidelines([])
+    const value = event.target.value as string;
+    const db = databases.find((d) => d.name === value) || null;
+    if(db){
+      setSelectedDatabase(db);
+      getAndSetGuidelines(db?.id as number);
+    }
+    
+  };  
+
   const [selectedGuideline, setSelectedGuideline] = useState<Guideline | null>(
     null
   );
@@ -152,8 +164,10 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
     try {
     setDetailLoading(true);  
       const result = await fetchApi<GuidelineDetail>(
-        `/guidelines/guideline-with-graph/${guidelineId}`,
-        "GET"
+        `/v1/knowledge-map/guidelines/guideline-with-graph/${guidelineId}`,
+        "GET",
+        undefined,
+        selectedDatabase?.id
       );
       console.log(result,'result')
       const data = result;
@@ -293,7 +307,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
         node.type !== initialNode.type ||
         node.code_set !== initialNode.code_set ||
         node.code !== initialNode.code ||
-        node.condition !== initialNode.condition ||
+        // node.condition !== initialNode.condition ||
         node.reference !== initialNode.reference ||
         node.text !== initialNode.text;
     });
@@ -1007,7 +1021,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
         edges: [...addedLinks, ...updatedLinks, ...deletedLinksPayload],
       };
 
-      const result = await fetchApi("/update", "POST", payload);
+      const result = await fetchApi("/v1/knowledge-map/update", "POST", payload, selectedDatabase?.id);
 
       if (result.success) {
         showSnackbar("Database synchronized successfully!", "success");
@@ -1035,24 +1049,46 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
     }
   };
 
-  const getAndSetGuidelines = async () => {
+  const getAndSetGuidelines = async (id?:number) => {
+    setApiLoader(true)
     try {
-      const result = await fetchApi<Guideline[]>("/guidelines", "GET");
+      const result = await fetchApi<Guideline[]>("/v1/knowledge-map/guidelines", "GET", undefined, id);
       if (result.success && result.data.length > 0) {
         setGuidelines(result.data); // Select the first guideline object
       }
     } catch (error) {
       console.error("Error fetching guidelines:", error);
+    } finally {
+      setApiLoader(false)
+    }
+  };
+
+  const getAndSetDataBase = async () => {
+    setApiLoader(true)
+    try {
+      const result = await fetchApi<Neo4jDatabase[]>("/v1/neo4j-databases", "GET");
+      if (result.success && result.data.length > 0) {
+        setDatabases(result.data); // Select the first guideline object
+      }
+    } catch (error) {
+      console.error("Error fetching guidelines:", error);
+    } finally {
+      setApiLoader(false)
     }
   };
   // Initialize data and token
   useEffect(() => {
-    getAndSetGuidelines();
+    getAndSetDataBase()
   }, []);
 
+  useEffect(() => {
+    if(selectedDatabase?.id){
+      getAndSetGuidelines(selectedDatabase?.id)
+    }
+  },[selectedDatabase?.id])
+
   // Handle URL parameter changes
-  console.log(guidelineId,'guidelineId')
-  const memoizedGetGuidelineDetail = useCallback(getGuidelineDetail, [setDetailLoading, setGuidelineId, setNodes, setLinks, setInitialNodes, setInitialLinks, setHasChanges, setHiddenNodes, setHiddenLinks, setFilteredNodes, setFilteredLinks, resetAllStates, showSnackbar, getDefaultColor]);
+  const memoizedGetGuidelineDetail = useCallback(getGuidelineDetail, [setDetailLoading, selectedDatabase, setSelectedDatabase, setGuidelineId, setNodes, setLinks, setInitialNodes, setInitialLinks, setHasChanges, setHiddenNodes, setHiddenLinks, setFilteredNodes, setFilteredLinks, resetAllStates, showSnackbar, getDefaultColor]);
  
   useEffect(() => {
     if (guidelineId && guidelines.length > 0) {
@@ -1067,7 +1103,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
         setSelectedGuideline(null);
       }
     }
-  }, [guidelineId, setGuidelineId, guidelines, selectedGuideline, memoizedGetGuidelineDetail]);
+  }, [guidelineId, setGuidelineId, guidelines, selectedDatabase, selectedGuideline, memoizedGetGuidelineDetail]);
 
  
   const handleCreateGuideline = async (
@@ -1090,12 +1126,12 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
       association: newGuidelineAssociation,
       publication_year: newGuidelinePublicationYear,
     };
-
+    setApiLoader(true)
     try {
-      const result = await fetchApi<Guideline>("/guidelines", "POST", payload);
+      const result = await fetchApi<Guideline>("/v1/knowledge-map/guidelines", "POST", payload, selectedDatabase?.id);
       if (result.success) {
         showSnackbar("Guideline added successfully!", "success");
-        getAndSetGuidelines(); // Refresh the list
+        selectedDatabase?.id && getAndSetGuidelines(selectedDatabase?.id); // Refresh the list
         setShowAddGuidelineForm(false); // Hide the form
       } else {
         showSnackbar(`Failed to add guideline: ${result.message}`, "error");
@@ -1103,6 +1139,8 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
     } catch (error) {
       console.error("Error creating guideline:", error);
       showSnackbar("Error creating guideline.", "error");
+    } finally {
+      setApiLoader(false)
     }
   };
 
@@ -1117,6 +1155,8 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
       setNodes([]);
       setLinks([]);
       setSelectedGuideline(null);
+      setSelectedDatabase(null as never)
+      // setDatabases([])
       setFilteredNodes([]);
       setFilteredLinks([]);
       setHiddenNodes(new Set());
@@ -1152,7 +1192,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
               position: "absolute",
               top: 0,
               right: 0,
-              zIndex: 1000,
+              zIndex: 111111111111,
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
@@ -1191,15 +1231,110 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
             style={{
               position: "absolute",
               top: 30,
-              left: openSideDrawer ? 278 : 210,
+              left: openSideDrawer ? 278 : 80,
               // zIndex:100,
-              width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "63%" : openSideDrawer ? "79%" :  "83%",
+              width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "70%" : openSideDrawer ? "79%" :  "83%",
               display: "flex",
               justifyContent: "space-between",
             }}
           >
+            <Box sx={{display:"flex", flexDirection:openSideDrawer ? "column" : "row", gap:"10px"}}>
+          <Select
+            value={selectedDatabase?.name || ""}
+            onChange={(event) =>
+              handleDatabaseChange(event as React.ChangeEvent<{ value: unknown }>)
+            }
+            displayEmpty
+            renderValue={(value) => {
+              if (!value) {
+                return <Typography sx={{ color: '#666', fontSize: 14 }}>Select DB</Typography>;
+              }
+              return value;
+            }}
+            inputProps={{ "aria-label": "Select guideline" }}
+            sx={{
+              zIndex: 1111,
+              minWidth: 252,
+              maxWidth: 252,
+              height: 38,
+              backgroundColor: "white",
+              borderRadius: "8px",
+              fontSize: 14,
+              "& .MuiSelect-select": {
+                paddingY: "8px",
+                paddingX: "12px",
+              },
+              "& .MuiOutlinedInput-notchedOutline": {
+                border: "1px solid #ccc",
+              },
+              "&:hover .MuiOutlinedInput-notchedOutline": {
+                borderColor: "#01205C",
+              },
+              "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                borderColor: "#01205C",
+              },
+            }}
+            MenuProps={{
+              PaperProps: {
+                sx: {
+                  borderRadius: "10px",
+                  boxShadow: "0px 4px 12px rgba(0,0,0,0.1)",
+                  "& .MuiMenuItem-root": {
+                    fontSize: 14,
+                    paddingY: 1.2,
+                    borderBottom: "2px solid #f2f2f2",
+                  },
+                  "& .MuiMenuItem-root:last-of-type": {
+                    borderBottom: "none",
+                  },
+                  "& .MuiMenuItem-root:hover": {
+                    backgroundColor: "#f5f5f5",
+                  },
+                },
+              },
+            }}
+          >
+            {databases.map((db) => (
+              <MenuItem key={db.id} value={db.name} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                <Typography sx={{ fontSize: 14, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{db.name}</Typography>
+                {/* <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'flex', gap: 0.5 }}>
+                  <IconButton size="small" onClick={() => handleEditDatabaseClick(db)}>
+                    <EditOutlinedIcon fontSize="small"/>
+                  </IconButton>
+                  <IconButton size="small" onClick={() => {
+                    setDeleteTarget({ kind: 'database', id: db.id, name: db.name });
+                    setDeleteTitle('Delete Database');
+                    setDeleteSubtitle(`Are you sure you want to delete database "${db.name}"? This cannot be undone.`);
+                    setOpenDeleteModal(true);
+                  }}>
+                    <DeleteOutlineOutlinedIcon fontSize="small"/>
+                  </IconButton>
+                </Box> */}
+              </MenuItem>
+            ))}
+            {apiLoader && <Box sx={{display:"flex", alignItems:"center", justifyContent:"center",}}><img
+              src={loader}
+              alt="success"
+              style={{ width: "100px", borderRadius: "50%" }}
+            /></Box>}
+            {/* <MenuItem
+              value="add_new"
+              onClick={handleAddDatabaseClick}
+              sx={{
+                justifyContent: "center",
+                fontWeight: 500,
+                fontSize: 14,
+                "&:hover": {
+                  backgroundColor: "#f0f7ff",
+                },
+              }}
+            >
+              + Add
+            </MenuItem> */}
+          </Select>
             <Select
               value={selectedGuideline?.name || ""}
+              disabled={selectedDatabase?.id ? false : true}
               onChange={(event) =>
                 handleChange(event as React.ChangeEvent<{ value: unknown }>)
               }
@@ -1213,7 +1348,8 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
               inputProps={{ "aria-label": "Select guideline" }}
               sx={{
                 zIndex:1111,
-                minWidth: 300,
+                minWidth: 252,
+                maxWidth: 252,
                 height: 38,
                 backgroundColor: "white",
                 borderRadius: "8px",
@@ -1257,6 +1393,11 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                   <Typography sx={{ fontSize: 14 }}>{item.name}</Typography>
                 </MenuItem>
               ))}
+              {apiLoader && <Box sx={{display:"flex", alignItems:"center", justifyContent:"center",}}><img
+              src={loader}
+              alt="success"
+              style={{ width: "100px", borderRadius: "50%" }}
+            /></Box>}
               {/* <MenuItem
                 value="add_new"
                 onClick={handleAddGuidelineClick}
@@ -1272,6 +1413,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                 + Add
               </MenuItem> */}
             </Select>
+            </Box>
             {/* {!guidelineId ? ( */}
             {hasChanges ? (
                 <Button
@@ -1284,6 +1426,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                     padding: 1,
                     mt:"-4px",
                     minWidth:'150px',
+                    maxHeight:"40px",
                     textTransform: "none",
                     "&.Mui-disabled": {
                       backgroundColor: "#01205C",
@@ -1336,6 +1479,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                   padding: 1,
                   mt:"-4px",
                   px: 2,
+                  maxHeight:"40px",
                   textTransform: "none",
                   zIndex:1111,
                 }}
@@ -1352,7 +1496,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
             sx={{
               position: "absolute",
               cursor:"pointer",
-              top: 20,
+              top: 30,
               left: 20,
               zIndex: 10,
               display: "flex",
@@ -1499,8 +1643,107 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
         <Typography style={{ color: "#001C3C", fontWeight: 600 }}>
           Choose Guidelines for graph View
         </Typography>
+        <Box sx={{display:"flex", flexDirection:"column", gap:"10px"}}>
+          <Typography sx={{color:"#6A7888", fontSize:"14px"}}>Select DB</Typography>
+        <Select
+            value={selectedDatabase?.name || ""}
+            onChange={(event) =>
+              handleDatabaseChange(event as React.ChangeEvent<{ value: unknown }>)
+            }
+            displayEmpty
+            renderValue={(value) => {
+              if (!value) {
+                return <Typography sx={{ color: '#666', fontSize: 14 }}>Select DB</Typography>;
+              }
+              return value;
+            }}
+            inputProps={{ "aria-label": "Select guideline" }}
+            sx={{
+              zIndex: 1111,
+              minWidth: 400,
+              height: 38,
+              backgroundColor: "white",
+              borderRadius: "8px",
+              fontSize: 14,
+              "& .MuiSelect-select": {
+                paddingY: "8px",
+                paddingX: "12px",
+              },
+              "& .MuiOutlinedInput-notchedOutline": {
+                border: "1px solid #ccc",
+              },
+              "&:hover .MuiOutlinedInput-notchedOutline": {
+                borderColor: "#01205C",
+              },
+              "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                borderColor: "#01205C",
+              },
+            }}
+            MenuProps={{
+              PaperProps: {
+                sx: {
+                  borderRadius: "10px",
+                  boxShadow: "0px 4px 12px rgba(0,0,0,0.1)",
+                  "& .MuiMenuItem-root": {
+                    fontSize: 14,
+                    paddingY: 1.2,
+                    borderBottom: "2px solid #f2f2f2",
+                  },
+                  "& .MuiMenuItem-root:last-of-type": {
+                    borderBottom: "none",
+                  },
+                  "& .MuiMenuItem-root:hover": {
+                    backgroundColor: "#f5f5f5",
+                  },
+                },
+              },
+            }}
+          >
+            {databases.map((db) => (
+              <MenuItem key={db.id} value={db.name} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                <Typography sx={{ fontSize: 14, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{db.name}</Typography>
+                {/* <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'flex', gap: 0.5 }}>
+                  <IconButton size="small" onClick={() => handleEditDatabaseClick(db)}>
+                    <EditOutlinedIcon fontSize="small"/>
+                  </IconButton>
+                  <IconButton size="small" onClick={() => {
+                    setDeleteTarget({ kind: 'database', id: db.id, name: db.name });
+                    setDeleteTitle('Delete Database');
+                    setDeleteSubtitle(`Are you sure you want to delete database "${db.name}"? This cannot be undone.`);
+                    setOpenDeleteModal(true);
+                  }}>
+                    <DeleteOutlineOutlinedIcon fontSize="small"/>
+                  </IconButton>
+                </Box> */}
+              </MenuItem>
+            ))}
+            {apiLoader && <Box sx={{display:"flex", alignItems:"center", justifyContent:"center",}}><img
+              src={loader}
+              alt="success"
+              style={{ width: "100px", borderRadius: "50%" }}
+            /></Box>}
+            {/* <MenuItem
+              value="add_new"
+              onClick={handleAddDatabaseClick}
+              sx={{
+                justifyContent: "center",
+                fontWeight: 500,
+                fontSize: 14,
+                "&:hover": {
+                  backgroundColor: "#f0f7ff",
+                },
+              }}
+            >
+              + Add
+            </MenuItem> */}
+          </Select>
+          </Box>
+          <Box>
+          <Box sx={{display:"flex", flexDirection:"column", gap:"10px"}}>
+          <Typography sx={{color:"#6A7888", fontSize:"14px"}}>Select Guideline</Typography>
         <Select
           value={selectedGuideline?.name || ""}
+          disabled={selectedDatabase?.id ? false : true}
           onChange={(event) =>
             handleChange(event as React.ChangeEvent<{ value: unknown }>)
           }
@@ -1513,7 +1756,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
           }}
           inputProps={{ "aria-label": "Select guideline" }}
           sx={{
-            minWidth: 300,
+            minWidth: 400,
             height: 38,
             backgroundColor: "white",
             borderRadius: "8px",
@@ -1557,6 +1800,11 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
               <Typography sx={{ fontSize: 14 }}>{item.name}</Typography>
             </MenuItem>
           ))}
+          {apiLoader && <Box sx={{display:"flex", alignItems:"center", justifyContent:"center",}}><img
+              src={loader}
+              alt="success"
+              style={{ width: "100px", borderRadius: "50%" }}
+            /></Box>}
           {/* <MenuItem
                     value="add_new"
                     onClick={handleAddGuidelineClick}
@@ -1572,6 +1820,8 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                     + Add
                   </MenuItem> */}
         </Select>
+        </Box>
+        </Box>
       </div>}
     </>
   );

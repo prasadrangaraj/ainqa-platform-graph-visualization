@@ -19,15 +19,18 @@ import {
   Delete,
   FileDownload,
 } from "@mui/icons-material";
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import WarningIcon from "./icons/warningIcon";
 import ErrorModal from "./errorModal";
-import { fetchApi, type Guideline } from "./utils/api";
+import { fetchApi, type Guideline, type Neo4jDatabase } from "./utils/api";
 import DeleteModal from "./deleteModal";
 import SyncIcon from "./icons/syncIcon";
 import DeleteIcon from "./icons/deleteIcon";
 import { useGraphViewer } from "./GraphViewerContext";
-import Neo4jGraph, { type GraphHandle } from "./neo4jGraph";
-
+import Neo4jGraph from "./neo4jGraph";
+import ModalComponent from "./modal";
+import loader from "./assets/loader.gif";
 interface Node {
   id: string;
   name: string;
@@ -62,7 +65,6 @@ interface GraphEditorProps {
 
 const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   const { mode, guidelineId, setGuidelineId } = useGraphViewer();
-  console.log("Context state - mode:", mode, "guidelineId:", guidelineId);
   const [selectedGuideline, setSelectedGuideline] = useState<Guideline | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
@@ -87,6 +89,15 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   const [saveDataLoading, setSaveDataLoading] = useState(false);
 
  const [openSideDrawer, setOpenSideDrawer] = useState(false)
+
+ const[apiLoader, setApiLoader] = useState(false)
+ const[deleteLoader, setDeleteLoader] = useState(false)
+
+  // Unified delete modal state
+  const [openDeleteModal, setOpenDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: 'database' | 'guideline'; id: number | string; name: string } | null>(null);
+  const [deleteTitle, setDeleteTitle] = useState<string>("");
+  const [deleteSubtitle, setDeleteSubtitle] = useState<string>("");
 
   // Add ref for the Graph component to call recenter method
   const graphRef = useRef<{ recenter: () => void }>(null);
@@ -748,6 +759,10 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   ];
 
   const handleSaveData = async () => {
+    if (!selectedDatabase?.id) {
+      showSnackbar("Please select a database first", "warning");
+      return;
+    }
     if (!selectedGuideline?.id) {
       showSnackbar("Please select a guideline first", "warning");
       return;
@@ -785,8 +800,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
         edges: processedEdges,
       };
 
-      const result = await fetchApi("/upsert", "POST", payload);
-      console.log("result", result);
+      const result = await fetchApi("/v1/knowledge-map/upsert", "POST", payload, selectedDatabase?.id);
       if (result.success) {
         showSnackbar("Database synchronized successfully!", "success");
         setShowDrawer(false);
@@ -811,27 +825,94 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   };
 
       const [guidelines, setGuidelines] = useState<Guideline[]>([]);
+  const { databases, setDatabases, selectedDatabase, setSelectedDatabase} = useGraphViewer();
+
+  const handleDatabaseChange = (event: React.ChangeEvent<{ value: unknown }>) => {
+    setGuidelines([])
+    const value = event.target.value as string;
+    const db = databases.find((d) => d.name === value) || null;
+    if(db){
+      setSelectedDatabase(db);
+      getAndSetGuidelines(db?.id as number);
+    }
+    
+  };  
+
   
     // Control delete modal open
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const getAndSetGuidelines = async () => {
+
+  const getAndSetGuidelines = async (id:number) => {
+    setApiLoader(true)
     try {
-      const result = await fetchApi<Guideline[]>("/guidelines", "GET");
+      const result = await fetchApi<Guideline[]>("/v1/knowledge-map/guidelines", "GET", undefined, id);
       if (result.success && result.data.length > 0) {
         setGuidelines(result.data); // Select the first guideline object
       }
     } catch (error) {
       console.error("Error fetching guidelines:", error);
+    } finally{
+      setApiLoader(false)
+    }
+  };
+
+  const getAndSetDataBase = async () => {
+    setApiLoader(true)
+    try {
+      const result = await fetchApi<Neo4jDatabase[]>("/v1/neo4j-databases", "GET");
+      if (result.success && result.data.length > 0) {
+        setDatabases(result.data); // Select the first guideline object
+      }
+    } catch (error) {
+      console.error("Error fetching guidelines:", error);
+    } finally{
+      setApiLoader(false)
     }
   };
   useEffect(() => {
-    getAndSetGuidelines();
+    getAndSetDataBase()
   }, []);
 
+  // useEffect(() => {
+  //     getAndSetGuidelines();
+    
+  // }, [selectedDatabase?.id]);
+
       const [showAddGuidelineForm, setShowAddGuidelineForm] = useState(false);
+      const [showDatabaseForm, setShowDatabaseForm] = useState(false);
+      const [editingDatabaseId, setEditingDatabaseId] = useState<number | undefined>(undefined);
+      const [editingDatabaseInitial, setEditingDatabaseInitial] = useState<{
+        name: string;
+        url: string;
+        username: string;
+        password: string;
+        database: string;
+        description: string;
+      } | undefined>(undefined);
 
   const handleAddGuidelineClick = () => {
+    setEditingGuidelineId(undefined as any);
+    setEditingGuidelineInitial(undefined as any);
     setShowAddGuidelineForm(true);
+  };
+
+  const handleAddDatabaseClick = () => {
+    setEditingDatabaseId(undefined);
+    setEditingDatabaseInitial(undefined);
+    setShowDatabaseForm(true);
+  };
+
+  const handleEditDatabaseClick = (db: Neo4jDatabase) => {
+    setEditingDatabaseId(db.id);
+    setEditingDatabaseInitial({
+      name: db.name || '',
+      url: db.url || '',
+      username: db.username || '',
+      password: db.password || '',
+      database: db.database || '',
+      description: db.description || '',
+    });
+    setShowDatabaseForm(true);
   };
 
   const handleCreateGuideline = async (
@@ -854,12 +935,15 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       association: newGuidelineAssociation,
       publication_year: newGuidelinePublicationYear,
     };
+    setApiLoader(true)
 
     try {
-      const result = await fetchApi<Guideline>("/guidelines", "POST", payload);
+      const result = await fetchApi<Guideline>("/v1/knowledge-map/guidelines", "POST", payload, selectedDatabase?.id);
       if (result.success) {
         showSnackbar("Guideline added successfully!", "success");
-        getAndSetGuidelines(); // Refresh the list
+        if (selectedDatabase?.id) {
+          getAndSetGuidelines(selectedDatabase.id);
+        }
         setShowAddGuidelineForm(false); // Hide the form
       } else {
         showSnackbar(`Failed to add guideline: ${result.message}`, "error");
@@ -867,10 +951,202 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     } catch (error) {
       console.error("Error creating guideline:", error);
       showSnackbar("Error creating guideline.", "error");
+    } finally {
+      setApiLoader(false)
+    }
+  };
+
+  const [editingGuidelineId, setEditingGuidelineId] = useState<string | undefined>(undefined);
+  const [editingGuidelineInitial, setEditingGuidelineInitial] = useState<{
+    name: string;
+    association: string;
+    publication_year: string;
+  } | undefined>(undefined);
+
+  const handleEditGuidelineClick = (g: Guideline) => {
+    setEditingGuidelineId(g.id);
+    setEditingGuidelineInitial({
+      name: g.name,
+      association: g.association,
+      publication_year: g.publication_year,
+    });
+    setShowAddGuidelineForm(true);
+  };
+
+  const handleUpdateGuideline = async (
+    name: string,
+    association: string,
+    publicationYear: string,
+    id: string
+  ) => {
+    const payload = {
+      name,
+      version: 1,
+      association,
+      publication_year: publicationYear,
+      id:id
+    };
+    setApiLoader(true)
+    try {
+      const result = await fetchApi<Guideline>(`/v1/knowledge-map/guidelines`, "POST", payload, selectedDatabase?.id);
+      if (result.success) {
+        showSnackbar("Guideline updated successfully!", "success");
+        if (selectedDatabase?.id) {
+          await getAndSetGuidelines(selectedDatabase.id);
+        }
+        setShowAddGuidelineForm(false);
+        setEditingGuidelineId(undefined);
+        setEditingGuidelineInitial(undefined);
+      } else {
+        showSnackbar(`Failed to update guideline: ${result.message}`, "error");
+      }
+    } catch (error) {
+      console.error("Error updating guideline:", error);
+      showSnackbar("Error updating guideline.", "error");
+    } finally {
+      setApiLoader(false)
+    }
+  };
+
+  const handleDeleteGuideline = async (id: string) => {
+    if (!selectedDatabase?.id) {
+      showSnackbar("Please select a database first.", "warning");
+      return;
+    }
+    setDeleteLoader(true)
+    try {
+      const result = await fetchApi(`/v1/knowledge-map/guidelines/${id}`, "DELETE", undefined, selectedDatabase.id);
+      if ((result as any).success) {
+        showSnackbar("Guideline deleted successfully!", "success");
+        await getAndSetGuidelines(selectedDatabase.id);
+        if (guidelineId === id) {
+          setGuidelineId(null);
+          setSelectedGuideline(null);
+        }
+      } else {
+        showSnackbar(`Failed to delete guideline: ${(result as any).message}`, "error");
+      }
+    } catch (error) {
+      console.error("Error deleting guideline:", error);
+      showSnackbar("Error deleting guideline.", "error");
+    } finally {
+      setDeleteLoader(false)
     }
   };
 
 
+
+  const handleCreateDatabase = async (payload: {
+    name: string;
+    url: string;
+    username: string;
+    password: string;
+    database: string;
+    description: string;
+  }) => {
+    if (!payload.name || !payload.url || !payload.username || !payload.password || !payload.database) {
+      showSnackbar("Please fill all required fields.", "warning");
+      return;
+    }
+    setApiLoader(true)
+    try {
+      const result = await fetchApi<Neo4jDatabase>("/v1/neo4j-databases", "POST", payload);
+      if (result.success) {
+        showSnackbar("Database added successfully!", "success");
+        await getAndSetDataBase();
+        const createdName = payload.name;
+        const db = databases.find((d) => d.name === createdName);
+        if (db) {
+          setSelectedDatabase(db);
+          getAndSetGuidelines(db.id as number);
+        }
+        setShowDatabaseForm(false);
+      } else {
+        showSnackbar(`Failed to add database: ${result.message}`, "error");
+      }
+    } catch (error) {
+      console.error("Error creating database:", error);
+      showSnackbar("Error creating database.", "error");
+    } finally {
+      setApiLoader(false)
+    }
+  };
+
+  const handleUpdateDatabase = async (payload: {
+    name: string;
+    url: string;
+    username: string;
+    password: string;
+    database: string;
+    description: string;
+  }, id?: number) => {
+    if (!id) {
+      showSnackbar("Please choose a database to update.", "warning");
+      return;
+    }
+    setApiLoader(true)
+    try {
+      const result = await fetchApi<Neo4jDatabase>(`/v1/neo4j-databases/${id}`, "PUT", payload);
+      if (result.success) {
+        showSnackbar("Database updated successfully!", "success");
+        await getAndSetDataBase();
+        const db = databases.find((d) => d.id === id);
+        if (db) {
+          setSelectedDatabase(db);
+          getAndSetGuidelines(db.id as number);
+        }
+        setShowDatabaseForm(false);
+        setEditingDatabaseId(undefined);
+        setEditingDatabaseInitial(undefined);
+      } else {
+        showSnackbar(`Failed to update database: ${result.message}`, "error");
+      }
+    } catch (error) {
+      console.error("Error updating database:", error);
+      showSnackbar("Error updating database.", "error");
+    } finally {
+      setApiLoader(false)
+    }
+  };
+
+  const handleDeleteDatabase = async (id: number) => {
+    setDeleteLoader(true)
+    try {
+      const result = await fetchApi(`/v1/neo4j-databases/${id}`, "DELETE");
+      if ((result as any).success) {
+        showSnackbar("Database deleted successfully!", "success");
+        await getAndSetDataBase();
+        if (selectedDatabase?.id === id) {
+          setSelectedDatabase(null as any);
+          setGuidelineId(null);
+          setGuidelines([]);
+        }
+      } else {
+        showSnackbar(`Failed to delete database: ${(result as any).message}`, "error");
+      }
+    } catch (error) {
+      console.error("Error deleting database:", error);
+      showSnackbar("Error deleting database.", "error");
+    } finally {
+      setDeleteLoader(false)
+    }
+  };
+
+  const handleClickDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      if (deleteTarget.kind === 'database') {
+        await handleDeleteDatabase(deleteTarget.id as number);
+      } else if (deleteTarget.kind === 'guideline') {
+        await handleDeleteGuideline(deleteTarget.id as string);
+      }
+    } finally {
+      setOpenDeleteModal(false);
+      setDeleteTarget(null);
+      setDeleteTitle("");
+      setDeleteSubtitle("");
+    }
+  };
 
   const handleChange = (event: React.ChangeEvent<{ value: unknown }>) => {
     const value = event.target.value as string;
@@ -898,15 +1174,28 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
         onClose={handleSnackbarClose}
       />
 
-      {/* ---------- DELETE MODAL ---------- */}
+      {/* ---------- DELETE MODAL (Guideline only) ---------- */}
       <DeleteModal open={deleteModalOpen} setOpen={setDeleteModalOpen} />
       <DrawerComponent
-        open={showAddGuidelineForm}
+        open={showAddGuidelineForm || showDatabaseForm}
         isNavbar={isNavbar}
-        onClose={() => setShowAddGuidelineForm(false)}
+        onClose={() => {
+          if (showAddGuidelineForm) setShowAddGuidelineForm(false);
+          if (showDatabaseForm) setShowDatabaseForm(false);
+        }}
         showAddGuidelineForm={showAddGuidelineForm}
         onCreateGuideline={handleCreateGuideline}
         onCloseGuidelineForm={() => setShowAddGuidelineForm(false)}
+        guidelineId={editingGuidelineId as any}
+        guidelineInitial={editingGuidelineInitial}
+        onUpdateGuideline={handleUpdateGuideline}
+        loader={apiLoader}
+        showDatabaseForm={showDatabaseForm}
+        onCreateDatabase={handleCreateDatabase}
+        onCloseDatabaseForm={() => { setShowDatabaseForm(false); }}
+        editDatabaseId={editingDatabaseId}
+        editDatabaseInitial={editingDatabaseInitial}
+        onUpdateDatabase={handleUpdateDatabase}
       />
       <Box
         sx={{
@@ -921,18 +1210,113 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
           style={{
             position: "absolute",
             top: 30,
-            left: openSideDrawer ? 278 : 210,
+            left: openSideDrawer ? 278 : 80,
               // zIndex:100,
-            width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "63%" : openSideDrawer ? "79%" :  "83%",
+            width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "72%" : openSideDrawer ? "79%" :  "83%",
             display: "flex",
             justifyContent: "space-between",
           }}
         >
+          <Box sx={{display:"flex", flexDirection:openSideDrawer ? "column" : "row", gap:"10px"}}>
           <Select
+            value={selectedDatabase?.name || ""}
+            onChange={(event) =>
+              handleDatabaseChange(event as React.ChangeEvent<{ value: unknown }>)
+            }
+            displayEmpty
+            renderValue={(value) => {
+              if (!value) {
+                return <Typography sx={{ color: '#666', fontSize: 14 }}>Select DB</Typography>;
+              }
+              return value;
+            }}
+            inputProps={{ "aria-label": "Select guideline" }}
+            sx={{
+              zIndex: 1111,
+              minWidth: 252,
+              maxWidth:252,
+              height: 38,
+              backgroundColor: "white",
+              borderRadius: "8px",
+              fontSize: 14,
+              "& .MuiSelect-select": {
+                paddingY: "8px",
+                paddingX: "12px",
+              },
+              "& .MuiOutlinedInput-notchedOutline": {
+                border: "1px solid #ccc",
+              },
+              "&:hover .MuiOutlinedInput-notchedOutline": {
+                borderColor: "#01205C",
+              },
+              "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                borderColor: "#01205C",
+              },
+            }}
+            MenuProps={{
+              PaperProps: {
+                sx: {
+                  borderRadius: "10px",
+                  boxShadow: "0px 4px 12px rgba(0,0,0,0.1)",
+                  "& .MuiMenuItem-root": {
+                    fontSize: 14,
+                    paddingY: 1.2,
+                    borderBottom: "2px solid #f2f2f2",
+                  },
+                  "& .MuiMenuItem-root:last-of-type": {
+                    borderBottom: "none",
+                  },
+                  "& .MuiMenuItem-root:hover": {
+                    backgroundColor: "#f5f5f5",
+                  },
+                },
+              },
+            }}
+          >
+            {databases.map((db) => (
+              <MenuItem key={db.id} value={db.name} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                <Typography sx={{ fontSize: 14, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{db.name}</Typography>
+                <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'flex', gap: 0.5 }}>
+                  <IconButton size="small" onClick={() => handleEditDatabaseClick(db)}>
+                    <EditOutlinedIcon fontSize="small"/>
+                  </IconButton>
+                  <IconButton size="small" onClick={() => {
+                    setDeleteTarget({ kind: 'database', id: db.id, name: db.name });
+                    setDeleteTitle('Delete Database');
+                    setDeleteSubtitle(`Are you sure you want to delete database "${db.name}"? This cannot be undone.`);
+                    setOpenDeleteModal(true);
+                  }}>
+                    <DeleteOutlineOutlinedIcon fontSize="small"/>
+                  </IconButton>
+                </Box>
+              </MenuItem>
+            ))}
+            {apiLoader ? <Box sx={{display:"flex", alignItems:"center", justifyContent:"center",}}><img
+              src={loader}
+              alt="success"
+              style={{ width: "100px", borderRadius: "50%" }}
+            /></Box> : 
+            <MenuItem
+              value="add_new"
+              onClick={handleAddDatabaseClick}
+              sx={{
+                justifyContent: "center",
+                fontWeight: 500,
+                fontSize: 14,
+                "&:hover": {
+                  backgroundColor: "#f0f7ff",
+                },
+              }}
+            >
+              + Add
+            </MenuItem>}
+          </Select>
+          {selectedDatabase?.id && <Select
             value={selectedGuideline?.name || ""}
             onChange={(event) =>
               handleChange(event as React.ChangeEvent<{ value: unknown }>)
             }
+            disabled={selectedDatabase?.id ? false : true}
             displayEmpty
             renderValue={(value) => {
               if (!value) {
@@ -943,7 +1327,8 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
             inputProps={{ "aria-label": "Select guideline" }}
             sx={{
               zIndex: 1111,
-              minWidth: 300,
+              minWidth: 252,
+              maxWidth:252,
               height: 38,
               backgroundColor: "white",
               borderRadius: "8px",
@@ -983,11 +1368,28 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
             }}
           >
             {guidelines.map((item: Guideline) => (
-              <MenuItem key={item.id} value={item.name}>
-                <Typography sx={{ fontSize: 14 }}>{item.name}</Typography>
+              <MenuItem key={item.id} value={item.name} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                <Typography sx={{ fontSize: 14, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.name}</Typography>
+                <Box onClick={(e) => e.stopPropagation()} sx={{ display: 'flex', gap: 0.5 }}>
+                  <IconButton size="small" onClick={() => handleEditGuidelineClick(item)}>
+                    <EditOutlinedIcon fontSize="small"/>
+                  </IconButton>
+                  {/* <IconButton size="small" onClick={() => {
+                    setDeleteTarget({ kind: 'guideline', id: item.id, name: item.name });
+                    setDeleteTitle('Delete Guideline');
+                    setDeleteSubtitle(`Are you sure you want to delete guideline "${item.name}"? This cannot be undone.`);
+                    setOpenDeleteModal(true);
+                  }}>
+                    <DeleteOutlineOutlinedIcon fontSize="small"/>
+                  </IconButton> */}
+                </Box>
               </MenuItem>
             ))}
-            <MenuItem
+            {apiLoader ? <Box sx={{display:"flex", alignItems:"center", justifyContent:"center",}}><img
+              src={loader}
+              alt="success"
+              style={{ width: "100px", borderRadius: "50%" }}
+            /></Box> : <MenuItem
               value="add_new"
               onClick={handleAddGuidelineClick}
               sx={{
@@ -1000,8 +1402,9 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
               }}
             >
               + Add
-            </MenuItem>
-          </Select>
+            </MenuItem>}
+          </Select>}
+          </Box>
           { (filteredLinks.length > 0 || filteredNodes.length > 0) &&
             <Button
               onClick={handleSaveData}
@@ -1013,6 +1416,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
                 padding: 1,
                 mt:"-4px",
                 minWidth:'150px',
+                maxHeight:"40px",
                 textTransform: "none",
                 "&.Mui-disabled": {
                   backgroundColor: "#01205C",
@@ -1076,7 +1480,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
           sx={{
             position: "absolute",
             cursor:"pointer",
-            top: 20,
+            top: 30,
             left: 20,
             zIndex: 10,
             display: "flex",
@@ -1206,6 +1610,15 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
           </Box>
         </ErrorModal>
       )}
+       <ModalComponent
+         open={openDeleteModal}
+         loading={deleteLoader}
+         setOpen={setOpenDeleteModal}
+         handleClickDelete={() => { void handleClickDelete(); }}
+         deleteText="Delete"
+         deleteSubtitle={deleteSubtitle}
+         deleteTitle={deleteTitle}
+       />
     </>
   );
 };

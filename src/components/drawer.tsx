@@ -9,6 +9,7 @@ import {
   TextField,
   Drawer as MuiDrawer,
   IconButton,
+  CircularProgress,
 } from "@mui/material";
 import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
@@ -46,7 +47,43 @@ interface DrawerProps {
   showAddGuidelineForm?: boolean;
   onCreateGuideline?: (name: string, association: string, publicationYear: string) => void;
   onCloseGuidelineForm?: () => void;
+  guidelineId?: string;
+  guidelineInitial?: {
+    name: string;
+    association: string;
+    publication_year: string;
+  };
+  onUpdateGuideline?: (name: string, association: string, publicationYear: string, id: string) => void;
+  // Database form (create/edit)
+  showDatabaseForm?: boolean;
+  editDatabaseId?: number;
+  editDatabaseInitial?: {
+    name: string;
+    url: string;
+    username: string;
+    password: string;
+    database: string;
+    description: string;
+  };
+  onCreateDatabase?: (payload: {
+    name: string;
+    url: string;
+    username: string;
+    password: string;
+    database: string;
+    description: string;
+  }) => void;
+  onUpdateDatabase?: (payload: {
+    name: string;
+    url: string;
+    username: string;
+    password: string;
+    database: string;
+    description: string;
+  }, id?: number) => void;
+  onCloseDatabaseForm?: () => void;
   isNavbar:boolean;
+  loader?:boolean;
   // onCloseDetails?: () => void;
   // onCloseFilter?: () => void;
 }
@@ -66,7 +103,17 @@ const DrawerComponent: React.FC<DrawerProps> = ({
   showAddGuidelineForm = false,
   onCreateGuideline,
   onCloseGuidelineForm,
+  guidelineId,
+  guidelineInitial,
+  onUpdateGuideline,
+  showDatabaseForm = false,
+  editDatabaseId,
+  editDatabaseInitial,
+  onCreateDatabase,
+  onUpdateDatabase,
+  onCloseDatabaseForm,
   isNavbar,
+  loader,
   // onCloseFilter,
   // onCloseDetails
 }) => {
@@ -352,7 +399,7 @@ const DrawerComponent: React.FC<DrawerProps> = ({
           },
         }}
       />
-      <TextField
+      {/* <TextField
         label="Condition"
         value={editData?.condition || ''}
         onChange={(e) => handleInputChange('condition', e.target.value)}
@@ -377,7 +424,7 @@ const DrawerComponent: React.FC<DrawerProps> = ({
             color: '#01205C',
           },
         }}
-      />
+      /> */}
       <TextField
         label="Reference"
         value={editData?.reference || ''}
@@ -562,11 +609,11 @@ const DrawerComponent: React.FC<DrawerProps> = ({
           <strong>Code:</strong> {drawerData.code}
         </Typography>
       )}
-      {drawerData?.condition && (
+      {/* {drawerData?.condition && (
         <Typography variant="body2" sx={{ fontSize: "15px", mb: 1.5, color: '#555' }}>
           <strong>Condition:</strong> {drawerData.condition}
         </Typography>
-      )}
+      )} */}
       {drawerData?.reference && (
         <Typography variant="body2" sx={{ fontSize: "15px", mb: 1.5, color: '#555' }}>
           <strong>Reference:</strong> {drawerData.reference}
@@ -602,6 +649,44 @@ const DrawerComponent: React.FC<DrawerProps> = ({
   const [newGuidelineAssociation, setNewGuidelineAssociation] = useState("");
   const [newGuidelinePublicationYear, setNewGuidelinePublicationYear] = useState("");
 
+  useEffect(() => {
+    if (showAddGuidelineForm && guidelineInitial) {
+      setNewGuidelineName(guidelineInitial.name || "");
+      setNewGuidelineAssociation(guidelineInitial.association || "");
+      setNewGuidelinePublicationYear(guidelineInitial.publication_year || "");
+    }
+    if (showAddGuidelineForm && !guidelineInitial && !guidelineId) {
+      setNewGuidelineName("");
+      setNewGuidelineAssociation("");
+      setNewGuidelinePublicationYear("");
+    }
+  }, [showAddGuidelineForm, guidelineId, guidelineInitial]);
+  const [dbName, setDbName] = useState("");
+  const [dbUrl, setDbUrl] = useState("");
+  const [dbUsername, setDbUsername] = useState("");
+  const [dbPassword, setDbPassword] = useState("");
+  const [dbDatabase, setDbDatabase] = useState("");
+  const [dbDescription, setDbDescription] = useState("");
+
+  useEffect(() => {
+    if (showDatabaseForm && editDatabaseInitial) {
+      setDbName(editDatabaseInitial.name || "");
+      setDbUrl(editDatabaseInitial.url || "");
+      setDbUsername(editDatabaseInitial.username || "");
+      setDbPassword(editDatabaseInitial.password || "");
+      setDbDatabase(editDatabaseInitial.database || "");
+      setDbDescription(editDatabaseInitial.description || "");
+    }
+    if (showDatabaseForm && !editDatabaseId && !editDatabaseInitial) {
+      setDbName("");
+      setDbUrl("");
+      setDbUsername("");
+      setDbPassword("");
+      setDbDatabase("");
+      setDbDescription("");
+    }
+  }, [showDatabaseForm, editDatabaseId, editDatabaseInitial]);
+
   const renderGuidelineForm = () => (
     <Box sx={{ padding: "20px 10px" }}>
       <Typography variant="h6" sx={{ 
@@ -610,7 +695,7 @@ const DrawerComponent: React.FC<DrawerProps> = ({
         textAlign: 'center',
         color: '#01205C'
       }}>
-        Add New Guideline
+        {guidelineId ? 'Edit Guideline' : 'Add New Guideline'}
       </Typography>
       <TextField
         fullWidth
@@ -689,12 +774,15 @@ const DrawerComponent: React.FC<DrawerProps> = ({
       />
       <Button 
         fullWidth
+        disabled={!!loader}
         onClick={() => {
-          if (onCreateGuideline) {
+          if (guidelineId && onUpdateGuideline) {
+            onUpdateGuideline(newGuidelineName, newGuidelineAssociation, newGuidelinePublicationYear, guidelineId);
+          } else if (onCreateGuideline) {
             onCreateGuideline(newGuidelineName, newGuidelineAssociation, newGuidelinePublicationYear);
-            setNewGuidelineName("");
-            setNewGuidelineAssociation("");
-            setNewGuidelinePublicationYear("");
+            // setNewGuidelineName("");
+            // setNewGuidelineAssociation("");
+            // setNewGuidelinePublicationYear("");
           }
         }} 
         sx={{
@@ -715,7 +803,11 @@ const DrawerComponent: React.FC<DrawerProps> = ({
           },
         }}
       >
-        Create
+        {loader ? (
+          <CircularProgress size={20} sx={{ color: 'white' }} />
+        ) : (
+          guidelineId ? 'Update' : 'Create'
+        )}
       </Button>
       <Button 
         fullWidth
@@ -738,9 +830,192 @@ const DrawerComponent: React.FC<DrawerProps> = ({
     </Box>
   );
 
+  const renderDatabaseForm = () => (
+    <Box sx={{ padding: "20px 10px" }}>
+      <Typography variant="h6" sx={{ 
+        mb: 3,
+        fontWeight: 600,
+        textAlign: 'center',
+        color: '#01205C'
+      }}>
+        {editDatabaseId ? 'Edit Database' : 'Add New Database'}
+      </Typography>
+      <TextField
+        fullWidth
+        label="Name"
+        value={dbName}
+        onChange={(e) => setDbName(e.target.value)}
+        margin="normal"
+        size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px', 
+            '& fieldset': { borderColor: '#e0e0e0' },
+            '&:hover fieldset': { borderColor: '#01205C' },
+            '&.Mui-focused fieldset': { borderColor: '#01205C' },
+          },
+          '& .MuiInputLabel-root.Mui-focused': { color: '#01205C' },
+        }}
+      />
+      <TextField
+        fullWidth
+        label="URL"
+        value={dbUrl}
+        onChange={(e) => setDbUrl(e.target.value)}
+        margin="normal"
+        size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px', 
+            '& fieldset': { borderColor: '#e0e0e0' },
+            '&:hover fieldset': { borderColor: '#01205C' },
+            '&.Mui-focused fieldset': { borderColor: '#01205C' },
+          },
+          '& .MuiInputLabel-root.Mui-focused': { color: '#01205C' },
+        }}
+      />
+      <TextField
+        fullWidth
+        label="Username"
+        value={dbUsername}
+        onChange={(e) => setDbUsername(e.target.value)}
+        margin="normal"
+        size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px', 
+            '& fieldset': { borderColor: '#e0e0e0' },
+            '&:hover fieldset': { borderColor: '#01205C' },
+            '&.Mui-focused fieldset': { borderColor: '#01205C' },
+          },
+          '& .MuiInputLabel-root.Mui-focused': { color: '#01205C' },
+        }}
+      />
+      <TextField
+        fullWidth
+        label="Password"
+        type="password"
+        value={dbPassword}
+        onChange={(e) => setDbPassword(e.target.value)}
+        margin="normal"
+        size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px', 
+            '& fieldset': { borderColor: '#e0e0e0' },
+            '&:hover fieldset': { borderColor: '#01205C' },
+            '&.Mui-focused fieldset': { borderColor: '#01205C' },
+          },
+          '& .MuiInputLabel-root.Mui-focused': { color: '#01205C' },
+        }}
+      />
+      <TextField
+        fullWidth
+        label="Database"
+        value={dbDatabase}
+        onChange={(e) => setDbDatabase(e.target.value)}
+        margin="normal"
+        size="small"
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px', 
+            '& fieldset': { borderColor: '#e0e0e0' },
+            '&:hover fieldset': { borderColor: '#01205C' },
+            '&.Mui-focused fieldset': { borderColor: '#01205C' },
+          },
+          '& .MuiInputLabel-root.Mui-focused': { color: '#01205C' },
+        }}
+      />
+      <TextField
+        fullWidth
+        label="Description"
+        value={dbDescription}
+        onChange={(e) => setDbDescription(e.target.value)}
+        margin="normal"
+        size="small"
+        multiline
+        rows={3}
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px', 
+            '& fieldset': { borderColor: '#e0e0e0' },
+            '&:hover fieldset': { borderColor: '#01205C' },
+            '&.Mui-focused fieldset': { borderColor: '#01205C' },
+          },
+          '& .MuiInputLabel-root.Mui-focused': { color: '#01205C' },
+        }}
+      />
+      <Button 
+        fullWidth
+        disabled={!!loader}
+        onClick={() => {
+          const payload = {
+            name: dbName,
+            url: dbUrl,
+            username: dbUsername,
+            password: dbPassword,
+            database: dbDatabase,
+            description: dbDescription,
+          };
+          if (editDatabaseId) {
+            if (onUpdateDatabase) onUpdateDatabase(payload, editDatabaseId);
+          } else if (onCreateDatabase) {
+            onCreateDatabase(payload);
+          }
+        }} 
+        sx={{
+          backgroundColor: '#01205C',
+          color: 'white',
+          marginTop: '20px',
+          padding: '10px',
+          borderRadius: '8px',
+          textTransform: 'none',
+          fontWeight: 500,
+          '&:hover': {
+            backgroundColor: '#01205C',
+            opacity: 0.9,
+          },
+          '&:disabled': {
+            backgroundColor: '#01205C',
+            opacity: 0.7,
+          },
+        }}
+      >
+        {loader ? (
+          <CircularProgress size={20} sx={{ color: 'white' }} />
+        ) : (
+          editDatabaseId ? 'Update' : 'Create'
+        )}
+      </Button>
+      <Button 
+        fullWidth
+        onClick={() => {
+          if (onCloseDatabaseForm) onCloseDatabaseForm();
+        }} 
+        sx={{
+          color: '#01205C',
+          mt: 2,
+          padding: '8px',
+          border: '1px solid #01205C',
+          borderRadius: '8px',
+          textTransform: 'none',
+          fontWeight: 500,
+          '&:hover': {
+            backgroundColor: 'rgba(1, 32, 92, 0.04)',
+          },
+        }}
+      >
+        Cancel
+      </Button>
+    </Box>
+  );
+
   const renderContent = () => {
     if (showAddGuidelineForm) {
       return renderGuidelineForm();
+    }
+    if (showDatabaseForm) {
+      return renderDatabaseForm();
     }
 
     // Show filter panel when showFilter is true AND no node is selected AND not adding a node
