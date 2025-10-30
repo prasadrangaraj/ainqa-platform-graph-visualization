@@ -80,7 +80,6 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
   const { guidelineId, setGuidelineId, databases, setDatabases, selectedDatabase, setSelectedDatabase } = useGraphViewer();
   const [guidelines, setGuidelines] = useState<Guideline[]>([]);
   const[apiLoader, setApiLoader] = useState(false)
-  console.log(databases,'databases')
 
   const handleDatabaseChange = (event: React.ChangeEvent<{ value: unknown }>) => {
     setGuidelines([])
@@ -93,7 +92,6 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
     
   };  
 
-  console.log(selectedDatabase,'selectedDatabase')
   const [selectedGuideline, setSelectedGuideline] = useState<Guideline | null>(
     null
   );
@@ -163,7 +161,6 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
   const graphRef = useRef<{ recenter: () => void }>(null);
 
   const getGuidelineDetail = async (guidelineId: string) => {
-    debugger
     try {
     setDetailLoading(true);  
       const result = await fetchApi<GuidelineDetail>(
@@ -1091,7 +1088,6 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
   },[selectedDatabase?.id])
 
   // Handle URL parameter changes
-  console.log(guidelineId,'guidelineId')
   const memoizedGetGuidelineDetail = useCallback(getGuidelineDetail, [setDetailLoading, selectedDatabase, setSelectedDatabase, setGuidelineId, setNodes, setLinks, setInitialNodes, setInitialLinks, setHasChanges, setHiddenNodes, setHiddenLinks, setFilteredNodes, setFilteredLinks, resetAllStates, showSnackbar, getDefaultColor]);
  
   useEffect(() => {
@@ -1237,7 +1233,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
               top: 30,
               left: openSideDrawer ? 278 : 80,
               // zIndex:100,
-              width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "63%" : openSideDrawer ? "79%" :  "83%",
+              width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "70%" : openSideDrawer ? "79%" :  "83%",
               display: "flex",
               justifyContent: "space-between",
             }}

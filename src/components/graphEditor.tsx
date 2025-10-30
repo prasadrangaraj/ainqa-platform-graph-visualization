@@ -65,7 +65,6 @@ interface GraphEditorProps {
 
 const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   const { mode, guidelineId, setGuidelineId } = useGraphViewer();
-  console.log("Context state - mode:", mode, "guidelineId:", guidelineId);
   const [selectedGuideline, setSelectedGuideline] = useState<Guideline | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
@@ -802,7 +801,6 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       };
 
       const result = await fetchApi("/v1/knowledge-map/upsert", "POST", payload, selectedDatabase?.id);
-      console.log("result", result);
       if (result.success) {
         showSnackbar("Database synchronized successfully!", "success");
         setShowDrawer(false);
@@ -828,7 +826,6 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
 
       const [guidelines, setGuidelines] = useState<Guideline[]>([]);
   const { databases, setDatabases, selectedDatabase, setSelectedDatabase} = useGraphViewer();
-  console.log(databases,'databases')
 
   const handleDatabaseChange = (event: React.ChangeEvent<{ value: unknown }>) => {
     setGuidelines([])
@@ -841,7 +838,6 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     
   };  
 
-  console.log(selectedDatabase,'selectedDatabase')
   
     // Control delete modal open
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -1216,7 +1212,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
             top: 30,
             left: openSideDrawer ? 278 : 80,
               // zIndex:100,
-            width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "63%" : openSideDrawer ? "79%" :  "83%",
+            width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "72%" : openSideDrawer ? "79%" :  "83%",
             display: "flex",
             justifyContent: "space-between",
           }}

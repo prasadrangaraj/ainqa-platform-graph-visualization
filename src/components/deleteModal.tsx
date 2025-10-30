@@ -20,7 +20,6 @@ export default function DeleteModal({ open, setOpen, onDeleteSuccess, showSnackb
   const[singleDeleteLoader, setSingleDeleteLoader] = useState(false)
   const[deleteLoader, setDeleteLoader] = useState(false)
 
-  console.log(isSingle,'isSingle')
 
   const handleDelete = async (withGuideline: boolean) => {
     if (!guidelineId) {

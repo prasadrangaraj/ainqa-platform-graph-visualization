@@ -64,29 +64,39 @@ const Neo4jGraph = forwardRef<GraphHandle, GraphProps>((props, ref) => {
   const getColor = (type: string) => colorMap[type] || '#ffeb3b';
 
   const getNvlNodes = (): Node[] =>
-    nodes.map((n) => ({
-      id: n.id,
-      label: n.name,
-      color: n.color || getColor(n.type),
-      caption: n.name,
-      properties: { ...n },
-      fx: n.fx,
-      fy: n.fy,
-    }));
+    nodes.map((n) => {
+      const isSelected =
+        props.selectedElement?.type === 'node' && props.selectedElement.data.id === n.id;
+      return {
+        id: n.id,
+        label: n.name,
+        color: isSelected ? '#01205C' : n.color || getColor(n.type),
+        caption: n.name,
+        properties: { ...n, highlighted: isSelected },
+        fx: n.fx,
+        fy: n.fy,
+      };
+    });
 
   const getNvlEdges = (): Relationship[] =>
     links.map((e) => {
-      // Extract source and target IDs, handling both string and object formats
       const sourceId = typeof e.source === 'string' ? e.source : e.source.id;
       const targetId = typeof e.target === 'string' ? e.target : e.target.id;
-      
+      const isLinked =
+        props.selectedElement?.type === 'node' &&
+        (sourceId === props.selectedElement.data.id || targetId === props.selectedElement.data.id);
+
+      const isEdgeSelected =
+        props.selectedElement?.type === 'link' && props.selectedElement.data.id === e.id;
+
       return {
         id: e.id,
         from: sourceId,
         to: targetId,
         type: e.edge_name,
         label: e.edge_name,
-        properties: { ...e },
+        color: isLinked || isEdgeSelected ? '#01205C' : undefined,
+        properties: { ...e, highlighted: isLinked || isEdgeSelected },
       };
     });
 
