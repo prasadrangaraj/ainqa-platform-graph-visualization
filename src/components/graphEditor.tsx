@@ -28,9 +28,9 @@ import DeleteModal from "./deleteModal";
 import SyncIcon from "./icons/syncIcon";
 import DeleteIcon from "./icons/deleteIcon";
 import { useGraphViewer } from "./GraphViewerContext";
-import Neo4jGraph, { type GraphHandle } from "./neo4jGraph";
+import Neo4jGraph from "./neo4jGraph";
 import ModalComponent from "./modal";
-
+import loader from "./assets/loader.gif";
 interface Node {
   id: string;
   name: string;
@@ -90,6 +90,8 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   const [saveDataLoading, setSaveDataLoading] = useState(false);
 
  const [openSideDrawer, setOpenSideDrawer] = useState(false)
+
+ const[apiLoader, setApiLoader] = useState(false)
 
   // Unified delete modal state
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
@@ -757,6 +759,10 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   ];
 
   const handleSaveData = async () => {
+    if (!selectedDatabase?.id) {
+      showSnackbar("Please select a database first", "warning");
+      return;
+    }
     if (!selectedGuideline?.id) {
       showSnackbar("Please select a guideline first", "warning");
       return;
@@ -840,6 +846,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   const getAndSetGuidelines = async (id:number) => {
+    setApiLoader(true)
     try {
       const result = await fetchApi<Guideline[]>("/v1/knowledge-map/guidelines", "GET", undefined, id);
       if (result.success && result.data.length > 0) {
@@ -847,10 +854,13 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       }
     } catch (error) {
       console.error("Error fetching guidelines:", error);
+    } finally{
+      setApiLoader(false)
     }
   };
 
   const getAndSetDataBase = async () => {
+    setApiLoader(true)
     try {
       const result = await fetchApi<Neo4jDatabase[]>("/v1/neo4j-databases", "GET");
       if (result.success && result.data.length > 0) {
@@ -858,6 +868,8 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       }
     } catch (error) {
       console.error("Error fetching guidelines:", error);
+    } finally{
+      setApiLoader(false)
     }
   };
   useEffect(() => {
@@ -926,6 +938,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       association: newGuidelineAssociation,
       publication_year: newGuidelinePublicationYear,
     };
+    setApiLoader(true)
 
     try {
       const result = await fetchApi<Guideline>("/v1/knowledge-map/guidelines", "POST", payload, selectedDatabase?.id);
@@ -941,6 +954,8 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     } catch (error) {
       console.error("Error creating guideline:", error);
       showSnackbar("Error creating guideline.", "error");
+    } finally {
+      setApiLoader(false)
     }
   };
 
@@ -973,8 +988,9 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       association,
       publication_year: publicationYear,
     };
+    setApiLoader(true)
     try {
-      const result = await fetchApi<Guideline>(`/v1/knowledge-map/guidelines/${id}`, "PUT", payload, selectedDatabase?.id);
+      const result = await fetchApi<Guideline>(`/v1/knowledge-map/guidelines/${id}`, "POST", payload, selectedDatabase?.id);
       if (result.success) {
         showSnackbar("Guideline updated successfully!", "success");
         if (selectedDatabase?.id) {
@@ -989,6 +1005,8 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     } catch (error) {
       console.error("Error updating guideline:", error);
       showSnackbar("Error updating guideline.", "error");
+    } finally {
+      setApiLoader(false)
     }
   };
 
@@ -997,6 +1015,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       showSnackbar("Please select a database first.", "warning");
       return;
     }
+    setApiLoader(true)
     try {
       const result = await fetchApi(`/v1/knowledge-map/guidelines/${id}`, "DELETE", undefined, selectedDatabase.id);
       if ((result as any).success) {
@@ -1012,6 +1031,8 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     } catch (error) {
       console.error("Error deleting guideline:", error);
       showSnackbar("Error deleting guideline.", "error");
+    } finally {
+      setApiLoader(false)
     }
   };
 
@@ -1029,6 +1050,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       showSnackbar("Please fill all required fields.", "warning");
       return;
     }
+    setApiLoader(true)
     try {
       const result = await fetchApi<Neo4jDatabase>("/v1/neo4j-databases", "POST", payload);
       if (result.success) {
@@ -1047,6 +1069,8 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     } catch (error) {
       console.error("Error creating database:", error);
       showSnackbar("Error creating database.", "error");
+    } finally {
+      setApiLoader(false)
     }
   };
 
@@ -1062,6 +1086,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       showSnackbar("Please choose a database to update.", "warning");
       return;
     }
+    setApiLoader(true)
     try {
       const result = await fetchApi<Neo4jDatabase>(`/v1/neo4j-databases/${id}`, "PUT", payload);
       if (result.success) {
@@ -1081,10 +1106,13 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     } catch (error) {
       console.error("Error updating database:", error);
       showSnackbar("Error updating database.", "error");
+    } finally {
+      setApiLoader(false)
     }
   };
 
   const handleDeleteDatabase = async (id: number) => {
+    setApiLoader(true)
     try {
       const result = await fetchApi(`/v1/neo4j-databases/${id}`, "DELETE");
       if ((result as any).success) {
@@ -1101,6 +1129,8 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     } catch (error) {
       console.error("Error deleting database:", error);
       showSnackbar("Error deleting database.", "error");
+    } finally {
+      setApiLoader(false)
     }
   };
 
@@ -1161,6 +1191,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
         guidelineId={editingGuidelineId as any}
         guidelineInitial={editingGuidelineInitial}
         onUpdateGuideline={handleUpdateGuideline}
+        loader={apiLoader}
         showDatabaseForm={showDatabaseForm}
         onCreateDatabase={handleCreateDatabase}
         onCloseDatabaseForm={() => { setShowDatabaseForm(false); }}
@@ -1205,6 +1236,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
             sx={{
               zIndex: 1111,
               minWidth: 252,
+              maxWidth:252,
               height: 38,
               backgroundColor: "white",
               borderRadius: "8px",
@@ -1261,6 +1293,11 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
                 </Box>
               </MenuItem>
             ))}
+            {apiLoader ? <Box sx={{display:"flex", alignItems:"center", justifyContent:"center",}}><img
+              src={loader}
+              alt="success"
+              style={{ width: "100px", borderRadius: "50%" }}
+            /></Box> : 
             <MenuItem
               value="add_new"
               onClick={handleAddDatabaseClick}
@@ -1274,7 +1311,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
               }}
             >
               + Add
-            </MenuItem>
+            </MenuItem>}
           </Select>
           <Select
             value={selectedGuideline?.name || ""}
@@ -1293,6 +1330,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
             sx={{
               zIndex: 1111,
               minWidth: 252,
+              maxWidth:252,
               height: 38,
               backgroundColor: "white",
               borderRadius: "8px",
@@ -1349,7 +1387,11 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
                 </Box>
               </MenuItem>
             ))}
-            <MenuItem
+            {apiLoader ? <Box sx={{display:"flex", alignItems:"center", justifyContent:"center",}}><img
+              src={loader}
+              alt="success"
+              style={{ width: "100px", borderRadius: "50%" }}
+            /></Box> : <MenuItem
               value="add_new"
               onClick={handleAddGuidelineClick}
               sx={{
@@ -1362,7 +1404,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
               }}
             >
               + Add
-            </MenuItem>
+            </MenuItem>}
           </Select>
           </Box>
           { (filteredLinks.length > 0 || filteredNodes.length > 0) &&
@@ -1376,6 +1418,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
                 padding: 1,
                 mt:"-4px",
                 minWidth:'150px',
+                maxHeight:"40px",
                 textTransform: "none",
                 "&.Mui-disabled": {
                   backgroundColor: "#01205C",

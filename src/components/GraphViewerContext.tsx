@@ -33,6 +33,8 @@ export const GraphViewerProvider: React.FC<GraphViewerProviderProps> = ({ childr
 
   const clearState = () => {
     setGuidelineId(null);
+    setDatabases([])
+    setSelectedDatabase(null)
     // Note: We don't clear mode here as it's controlled by the UI buttons
   };
 

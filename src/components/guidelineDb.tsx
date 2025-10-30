@@ -12,15 +12,12 @@ import {
   // Upload,
   VisibilityOff,
 } from "@mui/icons-material";
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { Box, Button, MenuItem, Select, Typography } from "@mui/material";
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import CustomSnackbar from "./snackbar";
 import DeleteModal from "./deleteModal";
 import DrawerComponent, { type DrawerData } from "./drawer";
 import ErrorModal from "./errorModal";
-import Graph from "./Graph";
 import DeleteIcon from "./icons/deleteIcon";
 import SearchFolderImage from "./icons/searchFolderImage";
 import SyncIcon from "./icons/syncIcon";
@@ -30,7 +27,6 @@ import { fetchApi, type Guideline, type Neo4jDatabase } from "./utils/api";
 import { useGraphViewer } from "./GraphViewerContext";
 import loader from "./assets/loader.gif";
 import Neo4jGraph from "./neo4jGraph";
-import ModalComponent from "./modal";
 
 interface Node {
   id: string;
@@ -83,7 +79,7 @@ interface GuidelineDetail extends Guideline {
 const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
   const { guidelineId, setGuidelineId, databases, setDatabases, selectedDatabase, setSelectedDatabase } = useGraphViewer();
   const [guidelines, setGuidelines] = useState<Guideline[]>([]);
-
+  const[apiLoader, setApiLoader] = useState(false)
   console.log(databases,'databases')
 
   const handleDatabaseChange = (event: React.ChangeEvent<{ value: unknown }>) => {
@@ -167,6 +163,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
   const graphRef = useRef<{ recenter: () => void }>(null);
 
   const getGuidelineDetail = async (guidelineId: string) => {
+    debugger
     try {
     setDetailLoading(true);  
       const result = await fetchApi<GuidelineDetail>(
@@ -1056,6 +1053,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
   };
 
   const getAndSetGuidelines = async (id?:number) => {
+    setApiLoader(true)
     try {
       const result = await fetchApi<Guideline[]>("/v1/knowledge-map/guidelines", "GET", undefined, id);
       if (result.success && result.data.length > 0) {
@@ -1063,10 +1061,13 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
       }
     } catch (error) {
       console.error("Error fetching guidelines:", error);
+    } finally {
+      setApiLoader(false)
     }
   };
 
   const getAndSetDataBase = async () => {
+    setApiLoader(true)
     try {
       const result = await fetchApi<Neo4jDatabase[]>("/v1/neo4j-databases", "GET");
       if (result.success && result.data.length > 0) {
@@ -1074,6 +1075,8 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
       }
     } catch (error) {
       console.error("Error fetching guidelines:", error);
+    } finally {
+      setApiLoader(false)
     }
   };
   // Initialize data and token
@@ -1081,9 +1084,15 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
     getAndSetDataBase()
   }, []);
 
+  useEffect(() => {
+    if(selectedDatabase?.id){
+      getAndSetGuidelines(selectedDatabase?.id)
+    }
+  },[selectedDatabase?.id])
+
   // Handle URL parameter changes
   console.log(guidelineId,'guidelineId')
-  const memoizedGetGuidelineDetail = useCallback(getGuidelineDetail, [setDetailLoading, setGuidelineId, setNodes, setLinks, setInitialNodes, setInitialLinks, setHasChanges, setHiddenNodes, setHiddenLinks, setFilteredNodes, setFilteredLinks, resetAllStates, showSnackbar, getDefaultColor]);
+  const memoizedGetGuidelineDetail = useCallback(getGuidelineDetail, [setDetailLoading, selectedDatabase, setSelectedDatabase, setGuidelineId, setNodes, setLinks, setInitialNodes, setInitialLinks, setHasChanges, setHiddenNodes, setHiddenLinks, setFilteredNodes, setFilteredLinks, resetAllStates, showSnackbar, getDefaultColor]);
  
   useEffect(() => {
     if (guidelineId && guidelines.length > 0) {
@@ -1098,7 +1107,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
         setSelectedGuideline(null);
       }
     }
-  }, [guidelineId, setGuidelineId, guidelines, selectedGuideline, memoizedGetGuidelineDetail]);
+  }, [guidelineId, setGuidelineId, guidelines, selectedDatabase, selectedGuideline, memoizedGetGuidelineDetail]);
 
  
   const handleCreateGuideline = async (
@@ -1121,7 +1130,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
       association: newGuidelineAssociation,
       publication_year: newGuidelinePublicationYear,
     };
-
+    setApiLoader(true)
     try {
       const result = await fetchApi<Guideline>("/v1/knowledge-map/guidelines", "POST", payload, selectedDatabase?.id);
       if (result.success) {
@@ -1134,6 +1143,8 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
     } catch (error) {
       console.error("Error creating guideline:", error);
       showSnackbar("Error creating guideline.", "error");
+    } finally {
+      setApiLoader(false)
     }
   };
 
@@ -1183,7 +1194,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
               position: "absolute",
               top: 0,
               right: 0,
-              zIndex: 1000,
+              zIndex: 111111111111,
               display: "flex",
               justifyContent: "center",
               alignItems: "center",
@@ -1246,6 +1257,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
             sx={{
               zIndex: 1111,
               minWidth: 252,
+              maxWidth: 252,
               height: 38,
               backgroundColor: "white",
               borderRadius: "8px",
@@ -1302,6 +1314,11 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                 </Box> */}
               </MenuItem>
             ))}
+            {apiLoader && <Box sx={{display:"flex", alignItems:"center", justifyContent:"center",}}><img
+              src={loader}
+              alt="success"
+              style={{ width: "100px", borderRadius: "50%" }}
+            /></Box>}
             {/* <MenuItem
               value="add_new"
               onClick={handleAddDatabaseClick}
@@ -1334,6 +1351,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
               sx={{
                 zIndex:1111,
                 minWidth: 252,
+                maxWidth: 252,
                 height: 38,
                 backgroundColor: "white",
                 borderRadius: "8px",
@@ -1377,6 +1395,11 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                   <Typography sx={{ fontSize: 14 }}>{item.name}</Typography>
                 </MenuItem>
               ))}
+              {apiLoader && <Box sx={{display:"flex", alignItems:"center", justifyContent:"center",}}><img
+              src={loader}
+              alt="success"
+              style={{ width: "100px", borderRadius: "50%" }}
+            /></Box>}
               {/* <MenuItem
                 value="add_new"
                 onClick={handleAddGuidelineClick}
@@ -1405,6 +1428,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                     padding: 1,
                     mt:"-4px",
                     minWidth:'150px',
+                    maxHeight:"40px",
                     textTransform: "none",
                     "&.Mui-disabled": {
                       backgroundColor: "#01205C",
@@ -1457,6 +1481,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                   padding: 1,
                   mt:"-4px",
                   px: 2,
+                  maxHeight:"40px",
                   textTransform: "none",
                   zIndex:1111,
                 }}
@@ -1694,6 +1719,11 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
                 </Box> */}
               </MenuItem>
             ))}
+            {apiLoader && <Box sx={{display:"flex", alignItems:"center", justifyContent:"center",}}><img
+              src={loader}
+              alt="success"
+              style={{ width: "100px", borderRadius: "50%" }}
+            /></Box>}
             {/* <MenuItem
               value="add_new"
               onClick={handleAddDatabaseClick}
@@ -1772,6 +1802,11 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
               <Typography sx={{ fontSize: 14 }}>{item.name}</Typography>
             </MenuItem>
           ))}
+          {apiLoader && <Box sx={{display:"flex", alignItems:"center", justifyContent:"center",}}><img
+              src={loader}
+              alt="success"
+              style={{ width: "100px", borderRadius: "50%" }}
+            /></Box>}
           {/* <MenuItem
                     value="add_new"
                     onClick={handleAddGuidelineClick}

@@ -15,7 +15,7 @@ interface DeleteModalProps {
 }
 
 export default function DeleteModal({ open, setOpen, onDeleteSuccess, showSnackbar, isSingle }: DeleteModalProps) {
-  const { guidelineId } = useGraphViewer();
+  const { guidelineId, selectedDatabase } = useGraphViewer();
 
   console.log(isSingle,'isSingle')
 
@@ -27,10 +27,10 @@ export default function DeleteModal({ open, setOpen, onDeleteSuccess, showSnackb
 
     try {
       const endpoint = withGuideline 
-        ? `/guidelines/guideline-with-graph/${guidelineId}`
-        : `/guidelines/graph/${guidelineId}`;
+        ? `/v1/knowledge-map/guidelines/guideline-with-graph/${guidelineId}`
+        : `/v1/knowledge-map/guidelines/graph/${guidelineId}`;
 
-      const result = await fetchApi(endpoint, "DELETE");
+      const result = await fetchApi(endpoint, "DELETE", undefined, selectedDatabase?.id);
       
       if (result.success) {
         showSnackbar?.(withGuideline ? "Entirely deleted successfully!" : "Nodes & Edges deleted successfully!", "success");

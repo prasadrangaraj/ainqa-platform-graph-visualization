@@ -9,6 +9,7 @@ import {
   TextField,
   Drawer as MuiDrawer,
   IconButton,
+  CircularProgress,
 } from "@mui/material";
 import DriveFileRenameOutlineIcon from "@mui/icons-material/DriveFileRenameOutline";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
@@ -82,6 +83,7 @@ interface DrawerProps {
   }, id?: number) => void;
   onCloseDatabaseForm?: () => void;
   isNavbar:boolean;
+  loader?:boolean;
   // onCloseDetails?: () => void;
   // onCloseFilter?: () => void;
 }
@@ -111,6 +113,7 @@ const DrawerComponent: React.FC<DrawerProps> = ({
   onUpdateDatabase,
   onCloseDatabaseForm,
   isNavbar,
+  loader,
   // onCloseFilter,
   // onCloseDetails
 }) => {
@@ -771,6 +774,7 @@ const DrawerComponent: React.FC<DrawerProps> = ({
       />
       <Button 
         fullWidth
+        disabled={!!loader}
         onClick={() => {
           if (guidelineId && onUpdateGuideline) {
             onUpdateGuideline(newGuidelineName, newGuidelineAssociation, newGuidelinePublicationYear, guidelineId);
@@ -799,7 +803,11 @@ const DrawerComponent: React.FC<DrawerProps> = ({
           },
         }}
       >
-        {guidelineId ? 'Update' : 'Create'}
+        {loader ? (
+          <CircularProgress size={20} sx={{ color: 'white' }} />
+        ) : (
+          guidelineId ? 'Update' : 'Create'
+        )}
       </Button>
       <Button 
         fullWidth
@@ -939,6 +947,7 @@ const DrawerComponent: React.FC<DrawerProps> = ({
       />
       <Button 
         fullWidth
+        disabled={!!loader}
         onClick={() => {
           const payload = {
             name: dbName,
@@ -972,7 +981,11 @@ const DrawerComponent: React.FC<DrawerProps> = ({
           },
         }}
       >
-        {editDatabaseId ? 'Update' : 'Create'}
+        {loader ? (
+          <CircularProgress size={20} sx={{ color: 'white' }} />
+        ) : (
+          editDatabaseId ? 'Update' : 'Create'
+        )}
       </Button>
       <Button 
         fullWidth
