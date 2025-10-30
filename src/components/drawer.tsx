@@ -399,7 +399,7 @@ const DrawerComponent: React.FC<DrawerProps> = ({
           },
         }}
       />
-      <TextField
+      {/* <TextField
         label="Condition"
         value={editData?.condition || ''}
         onChange={(e) => handleInputChange('condition', e.target.value)}
@@ -424,7 +424,7 @@ const DrawerComponent: React.FC<DrawerProps> = ({
             color: '#01205C',
           },
         }}
-      />
+      /> */}
       <TextField
         label="Reference"
         value={editData?.reference || ''}
@@ -609,11 +609,11 @@ const DrawerComponent: React.FC<DrawerProps> = ({
           <strong>Code:</strong> {drawerData.code}
         </Typography>
       )}
-      {drawerData?.condition && (
+      {/* {drawerData?.condition && (
         <Typography variant="body2" sx={{ fontSize: "15px", mb: 1.5, color: '#555' }}>
           <strong>Condition:</strong> {drawerData.condition}
         </Typography>
-      )}
+      )} */}
       {drawerData?.reference && (
         <Typography variant="body2" sx={{ fontSize: "15px", mb: 1.5, color: '#555' }}>
           <strong>Reference:</strong> {drawerData.reference}
@@ -780,9 +780,9 @@ const DrawerComponent: React.FC<DrawerProps> = ({
             onUpdateGuideline(newGuidelineName, newGuidelineAssociation, newGuidelinePublicationYear, guidelineId);
           } else if (onCreateGuideline) {
             onCreateGuideline(newGuidelineName, newGuidelineAssociation, newGuidelinePublicationYear);
-            setNewGuidelineName("");
-            setNewGuidelineAssociation("");
-            setNewGuidelinePublicationYear("");
+            // setNewGuidelineName("");
+            // setNewGuidelineAssociation("");
+            // setNewGuidelinePublicationYear("");
           }
         }} 
         sx={{

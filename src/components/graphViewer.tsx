@@ -69,7 +69,9 @@ const GraphViewerInternal: React.FC<GraphViewerProps> = ({isNavbar=true}) => {
             <Button
               onClick={() => {
                 setMode("graph");
-                clearState();
+                setTimeout(() => {
+                  clearState();
+                }, 100)
               }}
               sx={{
                 backgroundColor: active === "graph" ? "white" : "#01205C",

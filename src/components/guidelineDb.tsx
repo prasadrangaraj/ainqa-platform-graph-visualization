@@ -310,7 +310,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
         node.type !== initialNode.type ||
         node.code_set !== initialNode.code_set ||
         node.code !== initialNode.code ||
-        node.condition !== initialNode.condition ||
+        // node.condition !== initialNode.condition ||
         node.reference !== initialNode.reference ||
         node.text !== initialNode.text;
     });
@@ -1159,6 +1159,8 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
       setNodes([]);
       setLinks([]);
       setSelectedGuideline(null);
+      setSelectedDatabase(null as never)
+      // setDatabases([])
       setFilteredNodes([]);
       setFilteredLinks([]);
       setHiddenNodes(new Set());

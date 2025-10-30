@@ -92,6 +92,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
  const [openSideDrawer, setOpenSideDrawer] = useState(false)
 
  const[apiLoader, setApiLoader] = useState(false)
+ const[deleteLoader, setDeleteLoader] = useState(false)
 
   // Unified delete modal state
   const [openDeleteModal, setOpenDeleteModal] = useState(false);
@@ -987,10 +988,11 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       version: 1,
       association,
       publication_year: publicationYear,
+      id:id
     };
     setApiLoader(true)
     try {
-      const result = await fetchApi<Guideline>(`/v1/knowledge-map/guidelines/${id}`, "POST", payload, selectedDatabase?.id);
+      const result = await fetchApi<Guideline>(`/v1/knowledge-map/guidelines`, "POST", payload, selectedDatabase?.id);
       if (result.success) {
         showSnackbar("Guideline updated successfully!", "success");
         if (selectedDatabase?.id) {
@@ -1015,7 +1017,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       showSnackbar("Please select a database first.", "warning");
       return;
     }
-    setApiLoader(true)
+    setDeleteLoader(true)
     try {
       const result = await fetchApi(`/v1/knowledge-map/guidelines/${id}`, "DELETE", undefined, selectedDatabase.id);
       if ((result as any).success) {
@@ -1032,7 +1034,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       console.error("Error deleting guideline:", error);
       showSnackbar("Error deleting guideline.", "error");
     } finally {
-      setApiLoader(false)
+      setDeleteLoader(false)
     }
   };
 
@@ -1112,7 +1114,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   };
 
   const handleDeleteDatabase = async (id: number) => {
-    setApiLoader(true)
+    setDeleteLoader(true)
     try {
       const result = await fetchApi(`/v1/neo4j-databases/${id}`, "DELETE");
       if ((result as any).success) {
@@ -1130,7 +1132,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       console.error("Error deleting database:", error);
       showSnackbar("Error deleting database.", "error");
     } finally {
-      setApiLoader(false)
+      setDeleteLoader(false)
     }
   };
 
@@ -1313,7 +1315,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
               + Add
             </MenuItem>}
           </Select>
-          <Select
+          {selectedDatabase?.id && <Select
             value={selectedGuideline?.name || ""}
             onChange={(event) =>
               handleChange(event as React.ChangeEvent<{ value: unknown }>)
@@ -1376,14 +1378,14 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
                   <IconButton size="small" onClick={() => handleEditGuidelineClick(item)}>
                     <EditOutlinedIcon fontSize="small"/>
                   </IconButton>
-                  <IconButton size="small" onClick={() => {
+                  {/* <IconButton size="small" onClick={() => {
                     setDeleteTarget({ kind: 'guideline', id: item.id, name: item.name });
                     setDeleteTitle('Delete Guideline');
                     setDeleteSubtitle(`Are you sure you want to delete guideline "${item.name}"? This cannot be undone.`);
                     setOpenDeleteModal(true);
                   }}>
                     <DeleteOutlineOutlinedIcon fontSize="small"/>
-                  </IconButton>
+                  </IconButton> */}
                 </Box>
               </MenuItem>
             ))}
@@ -1405,7 +1407,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
             >
               + Add
             </MenuItem>}
-          </Select>
+          </Select>}
           </Box>
           { (filteredLinks.length > 0 || filteredNodes.length > 0) &&
             <Button
@@ -1614,6 +1616,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       )}
        <ModalComponent
          open={openDeleteModal}
+         loading={deleteLoader}
          setOpen={setOpenDeleteModal}
          handleClickDelete={() => { void handleClickDelete(); }}
          deleteText="Delete"

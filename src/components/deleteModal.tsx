@@ -1,5 +1,5 @@
-import React from "react";
-import { Box, Modal, Typography, Button, IconButton } from "@mui/material";
+import React, { useState } from "react";
+import { Box, Modal, Typography, Button, IconButton, CircularProgress } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ModalDeleteIcon from "./icons/modalDeleteIcon";
 
@@ -17,12 +17,20 @@ interface DeleteModalProps {
 export default function DeleteModal({ open, setOpen, onDeleteSuccess, showSnackbar, isSingle }: DeleteModalProps) {
   const { guidelineId, selectedDatabase } = useGraphViewer();
 
+  const[singleDeleteLoader, setSingleDeleteLoader] = useState(false)
+  const[deleteLoader, setDeleteLoader] = useState(false)
+
   console.log(isSingle,'isSingle')
 
   const handleDelete = async (withGuideline: boolean) => {
     if (!guidelineId) {
       showSnackbar?.("No guideline selected", "warning");
       return;
+    }
+    if(withGuideline){
+      setSingleDeleteLoader(true)
+    }else {
+      setDeleteLoader(true)
     }
 
     try {
@@ -44,6 +52,9 @@ export default function DeleteModal({ open, setOpen, onDeleteSuccess, showSnackb
     } catch (error) {
       console.error("Error deleting:", error);
       showSnackbar?.("Error occurred while deleting.", "error");
+    } finally {
+      setSingleDeleteLoader(false)
+      setDeleteLoader(false)
     }
   };
   return (
@@ -106,13 +117,15 @@ export default function DeleteModal({ open, setOpen, onDeleteSuccess, showSnackb
             style={{
               borderColor: "#d3d3d3",
               color: "#000",
+              minWidth:"100px",
               textTransform: "none",
               borderRadius: "8px",
               padding: "8px 16px",
               fontSize: "14px",
             }}
           >
-            Delete Nodes & Edges
+            {deleteLoader ? (
+          <CircularProgress size={20} sx={{ color: '#e50a0a' }} />) :"Delete Nodes & Edges"}
           </Button>}
           <Button
             variant="outlined"
@@ -120,13 +133,16 @@ export default function DeleteModal({ open, setOpen, onDeleteSuccess, showSnackb
             style={{
               borderColor: "#d3d3d3",
               color: "#000",
+              minWidth:"100px",
               textTransform: "none",
               borderRadius: "8px",
               padding: "8px 16px",
               fontSize: "14px",
             }}
           >
-            {isSingle ?  "Delete Entirely" : "Delete Guideline"}
+            {isSingle ? singleDeleteLoader ? (
+          <CircularProgress size={20} sx={{ color: '#e50a0a' }} />) : "Delete Entirely" : singleDeleteLoader ? (
+            <CircularProgress size={20} sx={{ color: '#e50a0a' }} />) : "Delete Guideline"}
           </Button>
 
           

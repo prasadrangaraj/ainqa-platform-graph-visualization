@@ -1,10 +1,11 @@
 import React from "react";
-import { Box, Modal, Typography, Button, IconButton } from "@mui/material";
+import { Box, Modal, Typography, Button, IconButton, CircularProgress } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import ModalDeleteIcon from "./icons/modalDeleteIcon";
 
 interface DeleteModalProps {
   open: boolean;
+  loading:boolean;
   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
   deleteText:string;
   handleClickDelete:() => void;
@@ -13,7 +14,7 @@ interface DeleteModalProps {
 
 }
 
-export default function ModalComponent({ open, setOpen, deleteText, handleClickDelete, deleteSubtitle, deleteTitle }: DeleteModalProps) {
+export default function ModalComponent({ open, setOpen, deleteText, loading, handleClickDelete, deleteSubtitle, deleteTitle }: DeleteModalProps) {
 
   return (
     <Modal open={open} onClose={() => setOpen(false)} sx={{zIndex: '11111'}}>
@@ -74,6 +75,7 @@ export default function ModalComponent({ open, setOpen, deleteText, handleClickD
             onClick={handleClickDelete}
             style={{
               borderColor: "#d3d3d3",
+              minWidth:"100px",
               color: "#000",
               textTransform: "none",
               borderRadius: "8px",
@@ -81,7 +83,10 @@ export default function ModalComponent({ open, setOpen, deleteText, handleClickD
               fontSize: "14px",
             }}
           >
-            {deleteText}
+            {loading ? (
+          <CircularProgress size={20} sx={{ color: '#e50a0a' }} />
+        ) : (
+            deleteText)}
           </Button>
 
 
