@@ -27,6 +27,7 @@ import { fetchApi, type Guideline, type Neo4jDatabase } from "./utils/api";
 import { useGraphViewer } from "./GraphViewerContext";
 import loader from "./assets/loader.gif";
 import Neo4jGraph from "./neo4jGraph";
+import Editor, { DiffEditor } from "@monaco-editor/react";
 
 interface Node {
   id: string;
@@ -139,6 +140,15 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
 
   const [openSideDrawer, setOpenSideDrawer] = useState(false)
 
+  // Monaco Editor state
+  const [editorContent, setEditorContent] = useState<string>("");
+  const [viewState, setViewState] = useState<"graph" | "json">("graph"); 
+  const [hasJsonData, setHasJsonData] = useState(false);
+  const [isEditingJson, setIsEditingJson] = useState(false);
+  const [showDiffEditor, setShowDiffEditor] = useState(false);
+  const [originalJson, setOriginalJson] = useState<string>("");
+  const [hasJsonChanges, setHasJsonChanges] = useState(false);
+
   const showSnackbar = useCallback((message: string, severity: "success" | "error" | "info" | "warning") => {
     setSnackbarMessage(message);
     setSnackbarSeverity(severity);
@@ -205,6 +215,12 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
         setDeletedLinks(new Set());
         setFilteredNodes(newNodes);
         setFilteredLinks(newLinks);
+        
+        // Set the JSON content in Monaco Editor
+        setEditorContent(JSON.stringify({ nodes: data.nodes, edges: data.edges }, null, 2));
+        setOriginalJson(JSON.stringify({ nodes: data.nodes, edges: data.edges }, null, 2));
+        setHasJsonChanges(false);
+        
         resetAllStates();
         showSnackbar("JSON loaded successfully!", "success");
     } catch (error) {
@@ -516,34 +532,66 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
   };
 
   const downloadJson = () => {
-    if (nodes.length === 0 && links.length === 0) {
+    let dataToDownload;
+    
+    if (viewState === "json" && editorContent) {
+      // Use the edited JSON content from Monaco editor
+      try {
+        dataToDownload = JSON.parse(editorContent);
+      } catch (err) {
+        showSnackbar("Invalid JSON in editor. Using graph data instead.", "warning");
+        dataToDownload = {
+          nodes: nodes.map((n) => ({
+            id: n.id,
+            type: n.type,
+            code_set: n.code_set || "",
+            code: n.code || "",
+            name: n.name,
+            condition: n.condition || "",
+            reference: n.reference || "",
+            text: n.text || "",
+          })),
+          edges: links.map((l) => ({
+            id: l.id,
+            source_node: l.source_node,
+            destination_node: l.destination_node,
+            edge_name: l.edge_name,
+            reference: l.reference || "",
+            text: l.text || "",
+          })),
+        };
+      }
+    } else {
+      // Use current graph data
+      dataToDownload = {
+        nodes: nodes.map((n) => ({
+          id: n.id,
+          type: n.type,
+          code_set: n.code_set || "",
+          code: n.code || "",
+          name: n.name,
+          condition: n.condition || "",
+          reference: n.reference || "",
+          text: n.text || "",
+        })),
+        edges: links.map((l) => ({
+          id: l.id,
+          source_node: l.source_node,
+          destination_node: l.destination_node,
+          edge_name: l.edge_name,
+          reference: l.reference || "",
+          text: l.text || "",
+        })),
+      };
+    }
+
+    if (dataToDownload.nodes.length === 0 && dataToDownload.edges.length === 0) {
       showSnackbar("No data to download!", "warning");
       return;
     }
 
-    const graphData = {
-      nodes: nodes.map((n) => ({
-        id: n.id,
-        type: n.type,
-        code_set: n.code_set || "",
-        code: n.code || "",
-        name: n.name,
-        condition: n.condition || "",
-        reference: n.reference || "",
-        text: n.text || "",
-      })),
-      edges: links.map((l) => ({
-        id: l.id,
-        source_node: l.source_node,
-        destination_node: l.destination_node,
-        edge_name: l.edge_name,
-        reference: l.reference || "",
-        text: l.text || "",
-      })),
-    };
-
     try {
-      const jsonStr = JSON.stringify(graphData, null, 2);
+      const jsonStr = JSON.stringify(dataToDownload, null, 2);
       const blob = new Blob([jsonStr], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -553,6 +601,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      showSnackbar("JSON downloaded successfully!", "success");
     } catch (err) {
       console.error("Error generating JSON:", err);
       showSnackbar("Failed to generate JSON. Check console for details.", "error");
@@ -617,6 +666,103 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
   //   };
   //   reader.readAsText(file);
   // };
+
+  // Handle editor content changes
+  const handleEditorChange = (value: string | undefined) => {
+    if (value !== undefined) {
+      setEditorContent(value);
+      // Check if content has changed from original
+      if (originalJson && value !== originalJson) {
+        setHasJsonChanges(true);
+      } else {
+        setHasJsonChanges(false);
+      }
+    }
+  };
+
+  // Handle edit/save JSON
+  const handleEditJson = () => {
+    if (isEditingJson) {
+      // Save the edited JSON
+      try {
+        const parsedData = JSON.parse(editorContent);
+        
+        if (!parsedData.nodes || !parsedData.edges) {
+          throw new Error("Invalid JSON structure: missing nodes or edges");
+        }
+
+        const newNodes: Node[] = parsedData.nodes.map((n: Node) => ({
+          ...n,
+          x: 0,
+          y: 0,
+          color: getDefaultColor(n.type),
+        }));
+
+        const newLinks: Link[] = parsedData.edges.map((e: Link) => ({
+          id: e.id,
+          source: e.source_node,
+          target: e.destination_node,
+          source_node: e.source_node,
+          destination_node: e.destination_node,
+          edge_name: e.edge_name,
+          reference: e.reference || "",
+          text: e.text || "",
+        }));
+
+        setNodes(newNodes);
+        setLinks(newLinks);
+        setHiddenNodes(new Set());
+        setHiddenLinks(new Set());
+        setFilteredNodes(newNodes);
+        setFilteredLinks(newLinks);
+        
+        // Update originalJson to the new saved state
+        setOriginalJson(editorContent);
+        setHasJsonChanges(false);
+        setIsEditingJson(false);
+        setShowDiffEditor(false);
+        showSnackbar("JSON saved successfully!", "success");
+      } catch (err) {
+        console.error("Invalid JSON:", err);
+        showSnackbar(
+          'Invalid JSON format! Please ensure it has "nodes" and "edges" arrays with valid IDs.',
+          "error"
+        );
+      }
+    } else {
+      // Enable editing - preserve the original state
+      if (!originalJson) {
+        setOriginalJson(editorContent);
+      }
+      setIsEditingJson(true);
+    }
+  };
+
+  // Handle toggle diff editor
+  const handleToggleDiffEditor = () => {
+    if (showDiffEditor) {
+      setShowDiffEditor(false);
+    } else {
+      // Only capture original state if we're not already editing
+      if (!isEditingJson) {
+        setOriginalJson(editorContent);
+      }
+      setShowDiffEditor(true);
+    }
+  };
+
+  // Handle diff editor content changes
+  const handleDiffEditorChange = (value: string | undefined) => {
+    if (value !== undefined) {
+      setEditorContent(value);
+      // Check if content has changed from original
+      if (originalJson && value !== originalJson) {
+        setHasJsonChanges(true);
+      } else {
+        setHasJsonChanges(false);
+      }
+    }
+  };
 
   // Exact recenter function from HTML
   const recenter = () => {
@@ -916,7 +1062,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
       if (!nodes || nodes.length === 0) {
         showSnackbar("No graph data available to sync.", "warning");
         return;
-      }
+    }
       setSaveDataLoading(true);
 
       const initialNodeIds = new Set(initialNodes.map((n) => n.id));
@@ -1230,15 +1376,15 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
           <div
             style={{
               position: "absolute",
-              top: 30,
-              left: openSideDrawer ? 278 : 80,
+              top: 28,
+              left: openSideDrawer && viewState === "graph" ? 278 : 80,
               // zIndex:100,
-              width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "70%" : openSideDrawer ? "79%" :  "83%",
+              width: (!!selectedElement || showFilter || addingNode) && openSideDrawer && viewState === "graph" ? "57%" : !!selectedElement || showFilter || addingNode ? "70%" : openSideDrawer && viewState === "graph" ? "79%" :  "90%",
               display: "flex",
               justifyContent: "space-between",
             }}
           >
-            <Box sx={{display:"flex", flexDirection:openSideDrawer ? "column" : "row", gap:"10px"}}>
+            <Box sx={{display:"flex", flexDirection:openSideDrawer && viewState === "graph" ? "column" : "row", gap:"10px"}}>
           <Select
             value={selectedDatabase?.name || ""}
             onChange={(event) =>
@@ -1415,103 +1561,161 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
             </Select>
             </Box>
             {/* {!guidelineId ? ( */}
-            {hasChanges ? (
-                <Button
-                  onClick={handleSaveData}
-                  disabled={saveDataLoading}
-                  sx={{
+
+
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:15,flexDirection: selectedElement ? "column" : "row"}}>
+              {/* Graph/JSON Toggle Buttons */}
+              {guidelineId && (
+                <div
+                  style={{
                     backgroundColor: "#01205C",
-                    color: "white",
-                    gap: 1,
-                    padding: 1,
-                    mt:"-4px",
-                    minWidth:'150px',
-                    maxHeight:"40px",
-                    textTransform: "none",
-                    "&.Mui-disabled": {
-                      backgroundColor: "#01205C",
-                      color: "white",
-                      opacity: 0.7,
-                    },
-                    "&:hover": {
-                      backgroundColor: "#01205C",
-                    },
-                    zIndex:1111,
+                    borderRadius: "5px",
+                    padding: 5,
+                    height: "35px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                    zIndex: 1111,
                   }}
-                  size="small"
                 >
-                  <SyncIcon
-                    style={{
-                      width: "20px",
-                      marginRight: "4px",
-                      display: "inline-block",
-                      transform: saveDataLoading
-                        ? "rotate(360deg)"
-                        : "rotate(0deg)",
-                      transition: "transform 1s linear",
-                      animation: saveDataLoading
-                        ? "rotation 1s infinite linear"
-                        : "none",
+                  <Button
+                    onClick={() => setViewState("graph")}
+                    sx={{
+                      backgroundColor: viewState === "graph" ? "white" : "#01205C",
+                      color: viewState === "graph" ? "black" : "white",
+                      textTransform: "none",
+                      px: 2,
+                      borderRadius: "8px",
+                      height: "35px",
+                      "&:hover": {
+                        backgroundColor: viewState === "graph" ? "#f5f5f5" : "#01205C",
+                        color: viewState === "graph" ? "#01205C" : "white",
+                      },
                     }}
-                  />
-                  <style>
-                    {`
-                        @keyframes rotation {
-                          from {
-                            transform: rotate(0deg);
-                          }
-                          to {
-                            transform: rotate(360deg);
-                          }
-                        }
-                      `}
-                  </style>
-                  Change Data
-                </Button>
-              ):
-            
-              (<Button
-                sx={{
-                  backgroundColor: "#fdebeb",
-                  border: "1px solid #e50a0a",
-                  color: "#e50a0a",
-                  gap: 1,
-                  padding: 1,
-                  mt:"-4px",
-                  px: 2,
-                  maxHeight:"40px",
-                  textTransform: "none",
-                  zIndex:1111,
-                }}
-                size="small"
-                onClick={handleDeleteClick} // Open delete modal
-              >
-                <DeleteIcon />
-                Delete
-              </Button>
-            )}
+                  >
+                    Graph
+                  </Button>
+
+                  <Button
+                    onClick={() => setViewState("json")}
+                    sx={{
+                      backgroundColor: viewState === "json" ? "white" : "#01205C",
+                      color: viewState === "json" ? "black" : "white",
+                      textTransform: "none",
+                      px: 2,
+                      borderRadius: "8px",
+                      height: "35px",
+                      "&:hover": {
+                        backgroundColor: viewState === "json" ? "#f5f5f5" : "#01205C",
+                        color: viewState === "json" ? "#01205C" : "white",
+                      },
+                    }}
+                  >
+                    JSON
+                  </Button>
+                </div>
+              )}
+                {hasChanges ? (
+                    <Button
+                      onClick={handleSaveData}
+                      disabled={saveDataLoading}
+                      sx={{
+                        backgroundColor: "#01205C",
+                        color: "white",
+                        gap: 1,
+                        padding: 1,
+                        minWidth:'150px',
+                        maxHeight:"40px",
+                        textTransform: "none",
+                        "&.Mui-disabled": {
+                          backgroundColor: "#01205C",
+                          color: "white",
+                          opacity: 0.7,
+                        },
+                        "&:hover": {
+                          backgroundColor: "#01205C",
+                        },
+                        zIndex:1111,
+                      }}
+                      size="small"
+                    >
+                      <SyncIcon
+                        style={{
+                          width: "20px",
+                          marginRight: "4px",
+                          display: "inline-block",
+                          transform: saveDataLoading
+                            ? "rotate(360deg)"
+                            : "rotate(0deg)",
+                          transition: "transform 1s linear",
+                          animation: saveDataLoading
+                            ? "rotation 1s infinite linear"
+                            : "none",
+                        }}
+                      />
+                      <style>
+                        {`
+                            @keyframes rotation {
+                              from {
+                                transform: rotate(0deg);
+                              }
+                              to {
+                                transform: rotate(360deg);
+                              }
+                            }
+                          `}
+                      </style>
+                      Change Data
+                    </Button>
+                  ):
+                
+                  (<Button
+                    sx={{
+                      backgroundColor: "#fdebeb",
+                      border: "1px solid #e50a0a",
+                      color: "#e50a0a",
+                      gap: 1,
+                      padding: 1,
+                      px: 2,
+                      maxHeight:"40px",
+                      textTransform: "none",
+                      zIndex:1111,
+                    }}
+                    size="small"
+                    onClick={handleDeleteClick} // Open delete modal
+                  >
+                    <DeleteIcon />
+                    Delete
+                  </Button>
+                )}
+            </div>
           </div>
-          <Box
-          onClick={() => setOpenSideDrawer(true)}
-            sx={{
-              position: "absolute",
-              cursor:"pointer",
-              top: 30,
-              left: 20,
-              zIndex: 10,
-              display: "flex",
-              flexDirection: "column",
-              backgroundColor:"#01205C",
-              padding:'6px',
-              borderRadius:'6px'
-            }}
-          >
-          <Menu sx={{color:"#ffff"}}/>
-          </Box>
+
+          {/* Only show menu icon in graph view */}
+          {viewState === "graph" && (
+            <Box
+              onClick={() => setOpenSideDrawer(true)}
+              sx={{
+                position: "absolute",
+                cursor:"pointer",
+                top: 30,
+                left: 20,
+                zIndex: 10,
+                display: "flex",
+                flexDirection: "column",
+                backgroundColor:"#01205C",
+                padding:'6px',
+                borderRadius:'6px'
+              }}
+            >
+              <Menu sx={{color:"#ffff"}}/>
+            </Box>
+          )}
+
           <ErrorModal
           drawerStyle={{minWidth:"100px", width:260}}
           isNavbar={isNavbar}
-            open={openSideDrawer}
+            open={openSideDrawer && viewState === "graph"}
             showIcon={true}
             onClose={() => setOpenSideDrawer(false)}
           >
@@ -1548,16 +1752,243 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
               addingEdge={addingEdge}
               selectedElement={selectedElement || undefined}
             /> */}
-            <Neo4jGraph
-            ref={graphRef}
-            nodes={filteredNodes}
-            links={filteredLinks}
-            onNodeClick={handleNodeClick}
-            onlinkClick={handleLinkClick}
-            onAddlink={handleAddEdge}
-            addinglink={addingEdge}
-            selectedElement={selectedElement || undefined}
-          />
+            {viewState === 'graph' ? (
+              // Graph view
+              <Neo4jGraph
+                ref={graphRef}
+                nodes={filteredNodes}
+                links={filteredLinks}
+                onNodeClick={handleNodeClick}
+                onlinkClick={handleLinkClick}
+                onAddlink={handleAddEdge}
+                addinglink={addingEdge}
+                selectedElement={selectedElement || undefined}
+              />
+            ) : (
+              // Monaco Editor view
+              <div style={{ marginTop:'100px',height:'560px',marginLeft:'20px', marginRight:'20px', position: 'relative' }}>
+                {/* Edit/Save JSON Button */}
+                <Box sx={{ 
+                  position: 'absolute', 
+                  top: 40, 
+                  right: showDiffEditor? 40: 30, 
+                  zIndex: 1000, 
+                  display: 'flex', 
+                  gap: 1,
+                  alignItems: 'center',
+                  backgroundColor: 'white',
+                  padding: hasJsonChanges? '8px 12px':'0px',
+                  borderRadius: '8px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  border: hasJsonChanges ? '1px solid #e0e0e0' : 'none'
+                }}>
+                  {/* Diff Editor Toggle - Only show when there are changes */}
+                  {hasJsonChanges && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography 
+                        sx={{ 
+                          fontSize: '12px', 
+                          fontWeight: 500,
+                          color: '#000000'
+                        }}
+                      >
+                        Diff checker
+                      </Typography>
+                      <Box
+                        onClick={handleToggleDiffEditor}
+                        sx={{
+                          width: 40,
+                          height: 20,
+                          backgroundColor: showDiffEditor ? '#01205c' : '#ccc',
+                          borderRadius: 10,
+                          position: 'relative',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s ease',
+                          '&:hover': {
+                            backgroundColor: showDiffEditor ? '#01205c' : '#bdbdbd',
+                          }
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: 16,
+                            height: 16,
+                            backgroundColor: 'white',
+                            borderRadius: '50%',
+                            position: 'absolute',
+                            top: 2,
+                            left: showDiffEditor ? 22 : 2,
+                            transition: 'all 0.3s ease',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                          }}
+                        />
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* Vertical divider - Only show when there are changes and diff toggle is visible */}
+                  {hasJsonChanges && (
+                    <Box sx={{ width: '1px', height: '20px', backgroundColor: '#e0e0e0', mx: 1 }} />
+                  )}
+
+                  {/* Edit/Save Button */}
+                  <Button
+                    onClick={handleEditJson}
+                    sx={{
+                      backgroundColor: isEditingJson ? "#4CAF50" : "#ffffff",
+                      color: isEditingJson ? "#ffffff" : "#000000",
+                      border: isEditingJson ? "none" : "none",
+                      textTransform: "none",
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      padding: '4px 12px',
+                      minWidth: 'auto',
+                      borderRadius: '6px',
+                      "&:hover": {
+                        backgroundColor: isEditingJson ? "#45a049" : "#ffffff",
+                        opacity: 0.9,
+                      },
+                    }}
+                    size="small"
+                  >
+                    {isEditingJson ? "Save Json" : "Edit Json"}
+                  </Button>
+                </Box>
+                
+                <div style={{width: "100%",marginLeft:'auto',height:'100%'}}>
+                  {showDiffEditor ? (
+                    <DiffEditor
+                      height="100%"
+                      language="json"
+                      theme="vs-dark"
+                      options={{
+                        readOnly: !isEditingJson, // Only allow editing when isEditingJson is true
+                        minimap: { enabled: false },
+                      }}
+                      original={originalJson}
+                      modified={editorContent}
+                      onMount={(editor, monaco) => {
+                      // color you want for the overview ruler background
+                      const RULER_BG = "#252526"; // VS Code dark background, change if you like
+                      const BORDER_LEFT = "#1e1e1e";
+
+                      // apply style to all existing canvases and parent container(s)
+                      function applyStylesToCanvases() {
+                        const canvases = document.querySelectorAll<HTMLCanvasElement>(
+                          "canvas.original.diffOverviewRuler, canvas.modified.diffOverviewRuler"
+                        );
+                        canvases.forEach((c) => {
+                          // direct style set (highest priority)
+                          c.style.backgroundColor = RULER_BG;
+                          c.style.borderLeft = `1px solid ${BORDER_LEFT}`;
+                          // in case canvas is transparent and parent shows through, style parent diffOverview
+                          const parent = c.closest(".diffOverview") as HTMLElement | null;
+                          if (parent) parent.style.backgroundColor = RULER_BG;
+                        });
+
+                        // also target any ancestor that may show white (safe selectors)
+                        const diffOverviewContainers = document.querySelectorAll<HTMLElement>(
+                          ".monaco-diff-editor .diffOverview, .monaco-diff-editor .diffOverviewRuler"
+                        );
+                        diffOverviewContainers.forEach((el) => {
+                          el.style.backgroundColor = RULER_BG;
+                        });
+                      }
+
+                      // Run once right away
+                      applyStylesToCanvases();
+
+                      // MutationObserver: watch the diff editor container for added/changed canvases.
+                      // It will re-apply styles if Monaco replaces/redraws canvases.
+                      const root = document.querySelector(".monaco-diff-editor") || document.body;
+                      const observer = new MutationObserver((mutations) => {
+                        let changed = false;
+                        for (const m of mutations) {
+                          if (m.addedNodes && m.addedNodes.length) {
+                            // if a canvas was added, reapply
+                            for (const node of Array.from(m.addedNodes)) {
+                              if (
+                                node instanceof HTMLElement &&
+                                (node.matches?.("canvas.diffOverviewRuler") ||
+                                  node.querySelector?.("canvas.diffOverviewRuler"))
+                              ) {
+                                changed = true;
+                                break;
+                              }
+                            }
+                          }
+                          // also if attributes changed on existing canvases
+                          if (m.type === "attributes" && m.target instanceof HTMLCanvasElement) {
+                            changed = true;
+                          }
+                          if (changed) break;
+                        }
+                        if (changed) applyStylesToCanvases();
+                      });
+
+                      observer.observe(root, {
+                        childList: true,
+                        subtree: true,
+                        attributes: true,
+                        attributeFilter: ["class", "style"],
+                      });
+
+                      // As a fallback, also run a short requestAnimationFrame loop for first 2s to catch late draws
+                      const stopAt = performance.now() + 2000;
+                      function rafLoop() {
+                        applyStylesToCanvases();
+                        if (performance.now() < stopAt) requestAnimationFrame(rafLoop);
+                      }
+                      requestAnimationFrame(rafLoop);
+
+                      // Clean up when component unmounts (if you have a way to detect unmount)
+                      // Save observer to editor for cleanup if you want:
+                      (editor as any).__diffRulerObserver = observer;
+
+                      // your existing change listener logic (kept)
+                      try {
+                        const modifiedEditor = (editor as any).getModifiedEditor
+                          ? (editor as any).getModifiedEditor()
+                          : null;
+                        if (modifiedEditor) {
+                          const model = modifiedEditor.getModel();
+                          if (model) {
+                            const disposable = model.onDidChangeContent(() => {
+                              const val = model.getValue();
+                              handleDiffEditorChange(val);
+                            });
+                            (editor as any).__changeDisposable = disposable;
+                          }
+                        }
+                      } catch (e) {
+                        console.warn("Failed to attach DiffEditor change listener", e);
+                      }
+                    }}
+                    />
+                  ) : (
+                    <Editor
+                      height="100%"
+                      defaultLanguage="json"
+                      value={editorContent}
+                      onChange={handleEditorChange}
+                      theme="vs-dark"
+                      options={{
+                        minimap: { enabled: false },
+                        scrollBeyondLastLine: false,
+                        fontSize: 14,
+                        lineNumbers: "on",
+                        folding: true,
+                        automaticLayout: true,
+                        formatOnPaste: true,
+                        formatOnType: true,
+                        tabSize: 2,
+                        readOnly: !isEditingJson, // Only allow editing when isEditingJson is true
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
           </Box>
 
           <DrawerComponent
