@@ -31,6 +31,8 @@ import { useGraphViewer } from "./GraphViewerContext";
 import Neo4jGraph from "./neo4jGraph";
 import ModalComponent from "./modal";
 import loader from "./assets/loader.gif";
+import Editor, { DiffEditor } from "@monaco-editor/react";
+
 interface Node {
   id: string;
   name: string;
@@ -101,6 +103,15 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
 
   // Add ref for the Graph component to call recenter method
   const graphRef = useRef<{ recenter: () => void }>(null);
+
+  // Monaco Editor state
+  const [editorContent, setEditorContent] = useState<string>("");
+  const [viewState, setViewState] = useState<"graph" | "json">("graph"); 
+  const [hasJsonData, setHasJsonData] = useState(false);
+  const [isEditingJson, setIsEditingJson] = useState(false);
+  const [showDiffEditor, setShowDiffEditor] = useState(false);
+  const [originalJson, setOriginalJson] = useState<string>("");
+  const [hasChanges, setHasChanges] = useState(false);
 
   const resetAllStates = () => {
     setSelectedElement(null);
@@ -342,34 +353,66 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   };
 
   const downloadJson = () => {
-    if (nodes.length === 0 && links.length === 0) {
+    let dataToDownload;
+    
+    if (viewState === "json" && editorContent) {
+      // Use the edited JSON content from Monaco editor
+      try {
+        dataToDownload = JSON.parse(editorContent);
+      } catch (err) {
+        showSnackbar("Invalid JSON in editor. Using graph data instead.", "warning");
+        dataToDownload = {
+          nodes: nodes.map((n) => ({
+            id: n.id,
+            type: n.type,
+            code_set: n.code_set || "",
+            code: n.code || "",
+            name: n.name,
+            condition: n.condition || "",
+            reference: n.reference || "",
+            text: n.text || "",
+          })),
+          edges: links.map((l) => ({
+            id: l.id,
+            source_node: l.source_node,
+            destination_node: l.destination_node,
+            edge_name: l.edge_name,
+            reference: l.reference || "",
+            text: l.text || "",
+          })),
+        };
+      }
+    } else {
+      // Use current graph data
+      dataToDownload = {
+        nodes: nodes.map((n) => ({
+          id: n.id,
+          type: n.type,
+          code_set: n.code_set || "",
+          code: n.code || "",
+          name: n.name,
+          condition: n.condition || "",
+          reference: n.reference || "",
+          text: n.text || "",
+        })),
+        edges: links.map((l) => ({
+          id: l.id,
+          source_node: l.source_node,
+          destination_node: l.destination_node,
+          edge_name: l.edge_name,
+          reference: l.reference || "",
+          text: l.text || "",
+        })),
+      };
+    }
+
+    if (dataToDownload.nodes.length === 0 && dataToDownload.edges.length === 0) {
       showSnackbar("No data to download!", "warning");
       return;
     }
 
-    const graphData = {
-      nodes: nodes.map((n) => ({
-        id: n.id,
-        type: n.type,
-        code_set: n.code_set || "",
-        code: n.code || "",
-        name: n.name,
-        condition: n.condition || "",
-        reference: n.reference || "",
-        text: n.text || "",
-      })),
-      edges: links.map((l) => ({
-        id: l.id,
-        source_node: l.source_node,
-        destination_node: l.destination_node,
-        edge_name: l.edge_name,
-        reference: l.reference || "",
-        text: l.text || "",
-      })),
-    };
-
     try {
-      const jsonStr = JSON.stringify(graphData, null, 2);
+      const jsonStr = JSON.stringify(dataToDownload, null, 2);
       const blob = new Blob([jsonStr], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -379,6 +422,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      showSnackbar("JSON downloaded successfully!", "success");
     } catch (err) {
       console.error("Error generating JSON:", err);
       showSnackbar("Failed to generate JSON. Check console for details.", "error");
@@ -400,52 +444,159 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   };
 
   const handleJsonUpload = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const result = e.target?.result as string;
-        const data = JSON.parse(result);
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const result = e.target?.result as string;
+      const data = JSON.parse(result);
 
-        if (!data.nodes || !data.edges) {
-          throw new Error("Invalid JSON structure: missing nodes or edges");
-        }
-
-        const newNodes: Node[] = data.nodes.map((n: Node) => ({
-          ...n,
-          x: 0,
-          y: 0,
-          color: getDefaultColor(n.type),
-        }));
-
-        const newLinks: Link[] = data.edges.map((e: Link) => ({
-          id: e.id,
-          source: e.source_node,
-          target: e.destination_node,
-          source_node: e.source_node,
-          destination_node: e.destination_node,
-          edge_name: e.edge_name,
-          reference: e.reference || "",
-          text: e.text || "",
-        }));
-
-        setNodes(newNodes);
-        setLinks(newLinks);
-        setHiddenNodes(new Set());
-        setHiddenLinks(new Set());
-        setFilteredNodes(newNodes);
-        setFilteredLinks(newLinks);
-        resetAllStates();
-        showSnackbar("JSON uploaded successfully!", "success");
-      } catch (err) {
-        console.error("Invalid JSON:", err);
-        showSnackbar(
-          'Invalid JSON file! Please ensure it has "nodes" and "edges" arrays with valid IDs.',
-          "error"
-        );
+      if (!data.nodes || !data.edges) {
+        throw new Error("Invalid JSON structure: missing nodes or edges");
       }
-    };
-    reader.readAsText(file);
+
+      const newNodes: Node[] = data.nodes.map((n: Node) => ({
+        ...n,
+        x: 0,
+        y: 0,
+        color: getDefaultColor(n.type),
+      }));
+
+      const newLinks: Link[] = data.edges.map((e: Link) => ({
+        id: e.id,
+        source: e.source_node,
+        target: e.destination_node,
+        source_node: e.source_node,
+        destination_node: e.destination_node,
+        edge_name: e.edge_name,
+        reference: e.reference || "",
+        text: e.text || "",
+      }));
+
+      setNodes(newNodes);
+      setLinks(newLinks);
+      setHiddenNodes(new Set());
+      setHiddenLinks(new Set());
+      setFilteredNodes(newNodes);
+      setFilteredLinks(newLinks);
+      
+      // Set the JSON content in Monaco Editor
+      setEditorContent(JSON.stringify(data, null, 2));
+      setOriginalJson(JSON.stringify(data, null, 2));
+      setHasChanges(false);
+      
+      // Set hasJsonData to true when JSON is uploaded and close drawer
+      setHasJsonData(true);
+      setOpenSideDrawer(false); // Add this line
+      
+      resetAllStates();
+      showSnackbar("JSON uploaded successfully!", "success");
+    } catch (err) {
+      console.error("Invalid JSON:", err);
+      showSnackbar(
+        'Invalid JSON file! Please ensure it has "nodes" and "edges" arrays with valid IDs.',
+        "error"
+      );
+    }
   };
+  reader.readAsText(file);
+};
+
+  // Handle editor content changes
+  const handleEditorChange = (value: string | undefined) => {
+    if (value !== undefined) {
+      setEditorContent(value);
+      // Check if content has changed from original
+      if (originalJson && value !== originalJson) {
+        setHasChanges(true);
+      } else {
+        setHasChanges(false);
+      }
+    }
+  };
+
+  // Handle edit/save JSON
+const handleEditJson = () => {
+  if (isEditingJson) {
+    // Save the edited JSON
+    try {
+      const parsedData = JSON.parse(editorContent);
+      
+      if (!parsedData.nodes || !parsedData.edges) {
+        throw new Error("Invalid JSON structure: missing nodes or edges");
+      }
+
+      const newNodes: Node[] = parsedData.nodes.map((n: Node) => ({
+        ...n,
+        x: 0,
+        y: 0,
+        color: getDefaultColor(n.type),
+      }));
+
+      const newLinks: Link[] = parsedData.edges.map((e: Link) => ({
+        id: e.id,
+        source: e.source_node,
+        target: e.destination_node,
+        source_node: e.source_node,
+        destination_node: e.destination_node,
+        edge_name: e.edge_name,
+        reference: e.reference || "",
+        text: e.text || "",
+      }));
+
+      setNodes(newNodes);
+      setLinks(newLinks);
+      setHiddenNodes(new Set());
+      setHiddenLinks(new Set());
+      setFilteredNodes(newNodes);
+      setFilteredLinks(newLinks);
+      
+      // Update originalJson to the new saved state
+      setOriginalJson(editorContent);
+      setHasChanges(false);
+      setIsEditingJson(false);
+      setShowDiffEditor(false);
+      showSnackbar("JSON saved successfully!", "success");
+    } catch (err) {
+      console.error("Invalid JSON:", err);
+      showSnackbar(
+        'Invalid JSON format! Please ensure it has "nodes" and "edges" arrays with valid IDs.',
+        "error"
+      );
+    }
+  } else {
+    // Enable editing - preserve the original state
+    if (!originalJson) {
+      setOriginalJson(editorContent);
+    }
+    setIsEditingJson(true);
+  }
+};
+
+  // Handle toggle diff editor
+const handleToggleDiffEditor = () => {
+  if (showDiffEditor) {
+    setShowDiffEditor(false);
+  } else {
+    // Only capture original state if we're not already editing
+    if (!isEditingJson) {
+      setOriginalJson(editorContent);
+    }
+    setShowDiffEditor(true);
+  }
+};
+
+// Handle diff editor content changes
+const handleDiffEditorChange = (value: string | undefined) => {
+  if (value !== undefined) {
+    setEditorContent(value);
+    // Check if content has changed from original
+    if (originalJson && value !== originalJson) {
+      setHasChanges(true);
+    } else {
+      setHasChanges(false);
+    }
+  }
+};
 
   // Exact recenter function from HTML
   const recenter = () => {
@@ -463,6 +614,12 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
       setFilteredLinks([]);
       setHiddenNodes(new Set());
       setHiddenLinks(new Set());
+      setEditorContent("");
+      setHasJsonData(false);
+      setOriginalJson("");
+      setIsEditingJson(false);
+      setShowDiffEditor(false);
+      setHasChanges(false);
       resetAllStates();
       setShowDrawer(false)
     }
@@ -704,7 +861,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
     },
   ];
 
-//   const handleGraphSync = (
+  //   const handleGraphSync = (
 //     graphNodes: Node[],
 //     graphLinks: Link[]
 //   ): { nodes: SyncNode[]; edges: SyncEdge[] } => {
@@ -1209,15 +1366,16 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
         <div
           style={{
             position: "absolute",
-            top: 30,
+            top: 25,
             left: openSideDrawer ? 278 : 80,
-              // zIndex:100,
-            width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "72%" : openSideDrawer ? "79%" :  "83%",
+            // zIndex:100,
+            width: (!!selectedElement || showFilter || addingNode) && openSideDrawer ? "57%" : !!selectedElement || showFilter || addingNode ? "72%" : openSideDrawer ? "79.05  %" :  "92%",
             display: "flex",
             justifyContent: "space-between",
+
           }}
         >
-          <Box sx={{display:"flex", flexDirection:openSideDrawer ? "column" : "row", gap:"10px"}}>
+        <Box sx={{display:"flex", flexDirection:openSideDrawer ? "column" : "row", gap:"10px"}}>
           <Select
             value={selectedDatabase?.name || ""}
             onChange={(event) =>
@@ -1405,7 +1563,59 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
             </MenuItem>}
           </Select>}
           </Box>
-          { (filteredLinks.length > 0 || filteredNodes.length > 0) &&
+
+          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:15,flexDirection: selectedElement ? "column" : "row"}}>
+
+            {/* Graph/JSON toggle buttons */}
+          <div
+          style={{
+            backgroundColor: "#01205C",
+            borderRadius: "5px",
+            padding: 5,
+            height: "35px",
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            zIndex: 1111,
+          }}
+        >
+          <Button
+            onClick={() => setViewState("graph")}
+            sx={{
+              backgroundColor: viewState === "graph" ? "white" : "#01205C",
+              color: viewState === "graph" ? "black" : "white",
+              textTransform: "none",
+              px: 2,
+              borderRadius: "8px",
+              height: "35px",
+              "&:hover": {
+                backgroundColor: viewState === "graph" ? "#f5f5f5" : "#01205C",
+                color: viewState === "graph" ? "#01205C" : "white",
+              },
+            }}
+          >
+            Graph
+          </Button>
+
+          <Button
+            onClick={() => setViewState("json")}
+            sx={{
+              backgroundColor: viewState === "json" ? "white" : "#01205C",
+              color: viewState === "json" ? "black" : "white",
+              textTransform: "none",
+              px: 2,
+              borderRadius: "8px",
+              height: "35px",
+              "&:hover": {
+                backgroundColor: viewState === "json" ? "#f5f5f5" : "#01205C",
+                color: viewState === "json" ? "#01205C" : "white",
+              },
+            }}
+          >
+            JSON
+          </Button>
+          </div>
+          {  (filteredLinks.length > 0 || filteredNodes.length > 0) &&
             <Button
               onClick={handleSaveData}
               disabled={saveDataLoading}
@@ -1414,7 +1624,6 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
                 color: "white",
                 gap: 1,
                 padding: 1,
-                mt:"-4px",
                 minWidth:'150px',
                 maxHeight:"40px",
                 textTransform: "none",
@@ -1465,6 +1674,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
                 px: 2,
                 textTransform: "none",
                 zIndex:1111,
+                marginRight:'50px'
               }}
               size="small"
               onClick={handleDeleteClick} // Open delete modal
@@ -1474,27 +1684,69 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
             </Button>
           }
         </div>
+          
+        </div>
 
-        <Box
-          onClick={() => setOpenSideDrawer(true)}
-          sx={{
-            position: "absolute",
-            cursor:"pointer",
-            top: 30,
-            left: 20,
-            zIndex: 10,
-            display: "flex",
-            flexDirection: "column",
-            backgroundColor:"#01205C",
-            padding:'6px',
-            borderRadius:'6px'
-          }}
-        >
-          <Menu sx={{color:"#ffff"}}/>
-        </Box>
+
+
+        {/* JSON Tools Side Drawer */}
         <ErrorModal
           drawerStyle={{minWidth:"100px", overflow:"hidden", mt:"0px", width:260}}
-          open={openSideDrawer}
+          open={openSideDrawer && viewState === "json"}
+          isNavbar={isNavbar}
+          showIcon={false}
+          onClose={() => setOpenSideDrawer(false)}
+        >
+          <Box
+            sx={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 2,
+              p:"10px",
+              position:"relative",
+            }}
+          >
+            <IconButton sx={{position:"absolute", right:0, top:0}} onClick={() => setOpenSideDrawer(false)}><CloseIcon /></IconButton>
+            <OptionBox 
+              title="JSON Tools" 
+              buttons={[
+                {
+                  label: "Upload JSON",
+                  icon: <Upload style={{ width: 17, marginRight: 2 }} />,
+                  onClick: uploadJson,
+                },
+                {
+                  label: "Download JSON",
+                  icon: <FileDownload style={{ width: 17, marginRight: 2 }} />,
+                  onClick: downloadJson,
+                }
+              ]} 
+            />
+          </Box>
+        </ErrorModal>
+
+          <Box
+            onClick={() => setOpenSideDrawer(true)}
+            sx={{
+              position: "absolute",
+              cursor:"pointer",
+              top: 26,
+              left: 20,
+              zIndex: 10,
+              display: "flex",
+              flexDirection: "column",
+              backgroundColor:"#01205C",
+              padding:'6px',
+              borderRadius:'6px'
+            }}
+          >
+            <Menu sx={{color:"#ffff"}}/>
+          </Box>
+
+        {/* Graph Tools Side Drawer */}
+        <ErrorModal
+          drawerStyle={{minWidth:"100px", overflow:"hidden", mt:"0px", width:260}}
+          open={openSideDrawer && viewState === "graph"}
           isNavbar={isNavbar}
           showIcon={false}
           onClose={() => setOpenSideDrawer(false)}
@@ -1525,7 +1777,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
         </ErrorModal>
 
         <Box sx={{ flex: 1, height: "100%" }}>
-          {/* <Graph
+           {/* <Graph
                 ref={graphRef}
                 nodes={filteredNodes}
                 links={filteredLinks}
@@ -1535,16 +1787,244 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
                 addingEdge={addingEdge}
                 selectedElement={selectedElement || undefined}
               /> */}
-          <Neo4jGraph
-            ref={graphRef}
-            nodes={filteredNodes}
-            links={filteredLinks}
-            onNodeClick={handleNodeClick}
-            onlinkClick={handleLinkClick}
-            onAddlink={handleAddEdge}
-            addinglink={addingEdge}
-            selectedElement={selectedElement || undefined}
-          />
+          {viewState === 'graph' ? (
+            // Graph view
+            <Neo4jGraph
+              ref={graphRef}
+              nodes={filteredNodes}
+              links={filteredLinks}
+              onNodeClick={handleNodeClick}
+              onlinkClick={handleLinkClick}
+              onAddlink={handleAddEdge}
+              addinglink={addingEdge}
+              selectedElement={selectedElement || undefined}
+            />
+          ) : (
+            // Monaco Editor view
+            <div style={{ marginTop:'100px',height:'560px',marginLeft:'30px', marginRight:'30px', position: 'relative' }}>
+              {/* Edit/Save JSON Button */}
+              <Box sx={{ 
+                position: 'absolute', 
+                top: 40, 
+                right: showDiffEditor? 40: 30, 
+                zIndex: 1000, 
+                display: 'flex', 
+                gap: 1,
+                alignItems: 'center',
+                backgroundColor: 'white',
+                padding: hasChanges? '8px 12px':'0px',
+                borderRadius: '8px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                border: hasChanges ? '1px solid #e0e0e0' : 'none'
+              }}>
+                {/* Diff Editor Toggle - Only show when there are changes */}
+                {hasChanges && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography 
+                      sx={{ 
+                        fontSize: '12px', 
+                        fontWeight: 500,
+                        color: '#000000'
+                      }}
+                    >
+                      Diff checker
+                    </Typography>
+                    <Box
+                      onClick={handleToggleDiffEditor}
+                      sx={{
+                        width: 40,
+                        height: 20,
+                        backgroundColor: showDiffEditor ? '#01205c' : '#ccc',
+                        borderRadius: 10,
+                        position: 'relative',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        '&:hover': {
+                          backgroundColor: showDiffEditor ? '#01205c' : '#bdbdbd',
+                        }
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          width: 16,
+                          height: 16,
+                          backgroundColor: 'white',
+                          borderRadius: '50%',
+                          position: 'absolute',
+                          top: 2,
+                          left: showDiffEditor ? 22 : 2,
+                          transition: 'all 0.3s ease',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                        }}
+                      />
+                    </Box>
+                  </Box>
+                )}
+
+                {/* Vertical divider - Only show when there are changes and diff toggle is visible */}
+                {hasChanges && (
+                  <Box sx={{ width: '1px', height: '20px', backgroundColor: '#e0e0e0', mx: 1 }} />
+                )}
+
+                {/* Edit/Save Button */}
+                <Button
+                  onClick={handleEditJson}
+                  sx={{
+                    backgroundColor: isEditingJson ? "#4CAF50" : "#ffffff",
+                    color: isEditingJson ? "#ffffff" : "#000000",
+                    border: isEditingJson ? "none" : "none",
+                    textTransform: "none",
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    padding: '4px 12px',
+                    minWidth: 'auto',
+                    borderRadius: '6px',
+                    "&:hover": {
+                      backgroundColor: isEditingJson ? "#45a049" : "#ffffff",
+                      opacity: 0.9,
+                    },
+                  }}
+                  size="small"
+                >
+                  {isEditingJson ? "Save Json" : "Edit Json"}
+                </Button>
+              </Box>
+              
+              <div style={{width: openSideDrawer ? "calc(100% - 280px)" : "100%",marginLeft:'auto',height:'100%'}}>
+                {showDiffEditor ? (
+                  <DiffEditor
+                    height="100%"
+                    language="json"
+                    theme="vs-dark"
+                    options={{
+                      readOnly: !isEditingJson, // Only allow editing when isEditingJson is true
+                      minimap: { enabled: false },
+                    }}
+                    original={originalJson}
+                    modified={editorContent}
+                    onMount={(editor, monaco) => {
+                      // color you want for the overview ruler background
+                      const RULER_BG = "#252526"; // VS Code dark background, change if you like
+                      const BORDER_LEFT = "#1e1e1e";
+
+                      // apply style to all existing canvases and parent container(s)
+                      function applyStylesToCanvases() {
+                        const canvases = document.querySelectorAll<HTMLCanvasElement>(
+                          "canvas.original.diffOverviewRuler, canvas.modified.diffOverviewRuler"
+                        );
+                        canvases.forEach((c) => {
+                          // direct style set (highest priority)
+                          c.style.backgroundColor = RULER_BG;
+                          c.style.borderLeft = `1px solid ${BORDER_LEFT}`;
+                          // in case canvas is transparent and parent shows through, style parent diffOverview
+                          const parent = c.closest(".diffOverview") as HTMLElement | null;
+                          if (parent) parent.style.backgroundColor = RULER_BG;
+                        });
+
+                        // also target any ancestor that may show white (safe selectors)
+                        const diffOverviewContainers = document.querySelectorAll<HTMLElement>(
+                          ".monaco-diff-editor .diffOverview, .monaco-diff-editor .diffOverviewRuler"
+                        );
+                        diffOverviewContainers.forEach((el) => {
+                          el.style.backgroundColor = RULER_BG;
+                        });
+                      }
+
+                      // Run once right away
+                      applyStylesToCanvases();
+
+                      // MutationObserver: watch the diff editor container for added/changed canvases.
+                      // It will re-apply styles if Monaco replaces/redraws canvases.
+                      const root = document.querySelector(".monaco-diff-editor") || document.body;
+                      const observer = new MutationObserver((mutations) => {
+                        let changed = false;
+                        for (const m of mutations) {
+                          if (m.addedNodes && m.addedNodes.length) {
+                            // if a canvas was added, reapply
+                            for (const node of Array.from(m.addedNodes)) {
+                              if (
+                                node instanceof HTMLElement &&
+                                (node.matches?.("canvas.diffOverviewRuler") ||
+                                  node.querySelector?.("canvas.diffOverviewRuler"))
+                              ) {
+                                changed = true;
+                                break;
+                              }
+                            }
+                          }
+                          // also if attributes changed on existing canvases
+                          if (m.type === "attributes" && m.target instanceof HTMLCanvasElement) {
+                            changed = true;
+                          }
+                          if (changed) break;
+                        }
+                        if (changed) applyStylesToCanvases();
+                      });
+
+                      observer.observe(root, {
+                        childList: true,
+                        subtree: true,
+                        attributes: true,
+                        attributeFilter: ["class", "style"],
+                      });
+
+                      // As a fallback, also run a short requestAnimationFrame loop for first 2s to catch late draws
+                      const stopAt = performance.now() + 2000;
+                      function rafLoop() {
+                        applyStylesToCanvases();
+                        if (performance.now() < stopAt) requestAnimationFrame(rafLoop);
+                      }
+                      requestAnimationFrame(rafLoop);
+
+                      // Clean up when component unmounts (if you have a way to detect unmount)
+                      // Save observer to editor for cleanup if you want:
+                      (editor as any).__diffRulerObserver = observer;
+
+                      // your existing change listener logic (kept)
+                      try {
+                        const modifiedEditor = (editor as any).getModifiedEditor
+                          ? (editor as any).getModifiedEditor()
+                          : null;
+                        if (modifiedEditor) {
+                          const model = modifiedEditor.getModel();
+                          if (model) {
+                            const disposable = model.onDidChangeContent(() => {
+                              const val = model.getValue();
+                              handleDiffEditorChange(val);
+                            });
+                            (editor as any).__changeDisposable = disposable;
+                          }
+                        }
+                      } catch (e) {
+                        console.warn("Failed to attach DiffEditor change listener", e);
+                      }
+                    }}
+                  />
+                ) : (
+                  <Editor
+                    height="100%"
+                    width="100%"
+                    defaultLanguage="json"
+                    value={editorContent}
+                    onChange={handleEditorChange}
+                    theme="vs-dark"
+                    options={{
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      fontSize: 14,
+                      lineNumbers: "on",
+                      folding: true,
+                      automaticLayout: true,
+                      formatOnPaste: true,
+                      formatOnType: true,
+                      tabSize: 2,
+                      readOnly: !isEditingJson, // Only allow editing when isEditingJson is true
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </Box>
 
         <DrawerComponent
