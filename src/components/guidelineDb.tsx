@@ -176,6 +176,7 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
     setEditorContent(originalJson);
     setHasJsonChanges(false);
     setIsEditingJsonLocal(false);
+    setShowDrawer(false);
     setShowDiffEditor(false);
     setShowUnsavedChangesModal(false);
     if (pendingAction) {
@@ -795,6 +796,8 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
           setHasJsonChanges(false);
           setIsEditingJsonLocal(false);
           setShowDiffEditor(false);
+          setErrorDrawerData(null);
+          setShowDrawer(false);
           showSnackbar("JSON validated and saved successfully!", "success");
         } else {
           showSnackbar(`JSON validation failed: ${validationResult.message}`, "error");
@@ -802,10 +805,15 @@ const GuidelineDb = ({isNavbar}:{isNavbar:boolean}) => {
         }
       } catch (err) {
         console.error("Invalid JSON:", err);
-        showSnackbar(
-          'Invalid JSON format! Please ensure it has "nodes" and "edges" arrays with valid IDs.',
-          "error"
-        );
+        setIsEditingJsonLocal(true);
+      const validationErrors =
+        (err as { validationErrors?: never })?.validationErrors || [];
+      console.log("Error updating database:", err);
+      console.log("Data:", err);
+      setShowDrawer(true);
+      setOpenSideDrawer(true)
+      setErrorDrawerData(validationErrors instanceof Error ? validationErrors.message : String(validationErrors));
+      showSnackbar("The nodes and edges in the given knowledge map are not in the required format. Please check the errors to fix them", "error");
         // DON'T reset isEditingJsonLocal here - keep it as true so button stays "Save Json"
       }
     } else {

@@ -140,6 +140,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   const handleDiscardChanges = () => {
     setEditorContent(originalJson);
     setHasChanges(false);
+    setShowDrawer(false);
     setIsEditingJsonLocal(false);
     setShowDiffEditor(false);
     setShowUnsavedChangesModal(false);
@@ -584,7 +585,7 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   };
 
   // Handle edit/save JSON
-const handleEditJson = () => {
+const handleEditJson = async () => {
   if (isEditingJson) {
     // Save the edited JSON
     try {
@@ -611,22 +612,23 @@ const handleEditJson = () => {
         reference: e.reference || "",
         text: e.text || "",
       }));
-
-      setNodes(newNodes);
-      setLinks(newLinks);
-      setHiddenNodes(new Set());
-      setHiddenLinks(new Set());
-      setFilteredNodes(newNodes);
-      setFilteredLinks(newLinks);
-      
-      // Update originalJson to the new saved state
-      setOriginalJson(editorContent);
-      setHasChanges(false);
-      setIsEditingJsonLocal(false); // Only reset on successful validation
-      setShowDiffEditor(false);
-      
+      const response = await handleSaveJsonData(parsedData);
+      if(response){
+        setNodes(newNodes);
+        setLinks(newLinks);
+        setHiddenNodes(new Set());
+        setHiddenLinks(new Set());
+        setFilteredNodes(newNodes);
+        setFilteredLinks(newLinks);
+        
+        // Update originalJson to the new saved state
+        setOriginalJson(editorContent);
+        setHasChanges(false);
+        setIsEditingJsonLocal(false); // Only reset on successful validation
+        setShowDiffEditor(false);
+      }
       // API call to save JSON data
-      handleSaveJsonData(parsedData);
+      
       
     } catch (err) {
       console.error("Invalid JSON:", err);
@@ -692,9 +694,11 @@ const handleEditJson = () => {
         showSnackbar("JSON validation updated successfully!", "success");
         setErrorDrawerData([]);
         setIsEditingJsonLocal(false);
+        setShowDrawer(false);
         // setGuidelineId(selectedGuideline.id);
         // setActive("guidelines");
         // resetAllStates();
+        return true
       } else {
         showSnackbar(`Failed to update database: ${result.message}`, "error");
       }
