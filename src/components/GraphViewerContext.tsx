@@ -17,6 +17,12 @@ interface GraphViewerContextType {
 
   // Clear all state (equivalent to clearing search params)
   clearState: () => void;
+
+  // New properties for unsaved changes tracking
+  hasUnsavedChanges: boolean;
+  setHasUnsavedChanges: (hasChanges: boolean) => void;
+  isEditingJson: boolean;
+  setIsEditingJson: (isEditing: boolean) => void;
 }
 
 const GraphViewerContext = createContext<GraphViewerContextType | undefined>(undefined);
@@ -30,11 +36,15 @@ export const GraphViewerProvider: React.FC<GraphViewerProviderProps> = ({ childr
   const [guidelineId, setGuidelineId] = useState<string | null>(null);
   const [databases, setDatabases] = useState<Neo4jDatabase[]>([]);
   const [selectedDatabase, setSelectedDatabase] = useState<Neo4jDatabase | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isEditingJson, setIsEditingJson] = useState(false);
 
   const clearState = () => {
     setGuidelineId(null);
     setDatabases([])
     setSelectedDatabase(null)
+    setHasUnsavedChanges(false);
+    setIsEditingJson(false);
     // Note: We don't clear mode here as it's controlled by the UI buttons
   };
 
@@ -48,6 +58,10 @@ export const GraphViewerProvider: React.FC<GraphViewerProviderProps> = ({ childr
     setGuidelineId,
     databases,
     clearState,
+    hasUnsavedChanges,
+    setHasUnsavedChanges,
+    isEditingJson,
+    setIsEditingJson,
   };
 
   return (

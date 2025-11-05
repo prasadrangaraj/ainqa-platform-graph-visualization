@@ -66,7 +66,7 @@ interface GraphEditorProps {
 }
 
 const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
-  const { mode, guidelineId, setGuidelineId } = useGraphViewer();
+  const { mode, guidelineId, setGuidelineId, setHasUnsavedChanges, setIsEditingJson } = useGraphViewer();
   const [selectedGuideline, setSelectedGuideline] = useState<Guideline | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
@@ -108,10 +108,67 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   const [editorContent, setEditorContent] = useState<string>("");
   const [viewState, setViewState] = useState<"graph" | "json">("graph"); 
   const [hasJsonData, setHasJsonData] = useState(false);
-  const [isEditingJson, setIsEditingJson] = useState(false);
+  const [isEditingJson, setIsEditingJsonLocal] = useState(false);
   const [showDiffEditor, setShowDiffEditor] = useState(false);
   const [originalJson, setOriginalJson] = useState<string>("");
   const [hasChanges, setHasChanges] = useState(false);
+
+  // New state for unsaved changes modal
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  // Separate state for JSON save loading
+  const [saveJsonLoading, setSaveJsonLoading] = useState(false);
+
+  // Sync editing state with context
+  useEffect(() => {
+    setHasUnsavedChanges(hasChanges && isEditingJson);
+    setIsEditingJson(isEditingJson);
+  }, [hasChanges, isEditingJson, setHasUnsavedChanges, setIsEditingJson]);
+
+  // Function to check if we should show unsaved changes modal
+  const withUnsavedChangesCheck = (action: () => void) => {
+    if (viewState === "json" && hasChanges && isEditingJson) {
+      setPendingAction(() => action);
+      setShowUnsavedChangesModal(true);
+    } else {
+      action();
+    }
+  };
+
+  // Handle discard changes
+  const handleDiscardChanges = () => {
+    setEditorContent(originalJson);
+    setHasChanges(false);
+    setIsEditingJsonLocal(false);
+    setShowDiffEditor(false);
+    setShowUnsavedChangesModal(false);
+    if (pendingAction) {
+      pendingAction();
+      setPendingAction(null);
+    }
+  };
+
+  // Handle save changes
+  const handleSaveChanges = () => {
+    handleEditJson(); // This will save the JSON
+    setShowUnsavedChangesModal(false);
+    if (pendingAction) {
+      // Wait a bit for save to complete then execute the action
+      setTimeout(() => {
+        if (pendingAction) {
+          pendingAction();
+          setPendingAction(null);
+        }
+      }, 500);
+    }
+  };
+
+  // Handle cancel action
+  const handleCancelAction = () => {
+    setShowUnsavedChangesModal(false);
+    setPendingAction(null);
+  };
 
   const resetAllStates = () => {
     setSelectedElement(null);
@@ -170,10 +227,12 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   };
 
   const startAddEdge = () => {
-    resetAllStates();
-    setAddingEdge(true);
-    setEdgeSource(null);
-    alert("Click on the source node, then the target node to create an edge.");
+    withUnsavedChangesCheck(() => {
+      resetAllStates();
+      setAddingEdge(true);
+      setEdgeSource(null);
+      alert("Click on the source node, then the target node to create an edge.");
+    });
   };
 
   const handleSaveEdit = (updatedData: DrawerData) => {
@@ -253,114 +312,144 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
   };
 
   const filterByCategory = (category: string) => {
-    resetAllStates();
-    if (category === "nodes") {
-      setFilteredNodes(nodes.filter((n) => !hiddenNodes.has(n.id)));
-      setFilteredLinks(
-        links.filter(
-          (l) =>
-            !hiddenLinks.has(l.id) &&
-            !hiddenNodes.has(l.source_node) &&
-            !hiddenNodes.has(l.destination_node)
-        )
-      );
-    } else if (category === "all") {
-      setFilteredNodes(nodes.filter((n) => !hiddenNodes.has(n.id)));
-      setFilteredLinks([]);
-    }
+    withUnsavedChangesCheck(() => {
+      resetAllStates();
+      if (category === "nodes") {
+        setFilteredNodes(nodes.filter((n) => !hiddenNodes.has(n.id)));
+        setFilteredLinks(
+          links.filter(
+            (l) =>
+              !hiddenLinks.has(l.id) &&
+              !hiddenNodes.has(l.source_node) &&
+              !hiddenNodes.has(l.destination_node)
+          )
+        );
+      } else if (category === "all") {
+        setFilteredNodes(nodes.filter((n) => !hiddenNodes.has(n.id)));
+        setFilteredLinks([]);
+      }
+    });
   };
 
   const hideSelectedNode = () => {
-    if (!selectedElement || selectedElement.type !== "node") {
-      alert("Please select a node to hide.");
-      return;
-    }
-
-    const nodeData = selectedElement.data as Node;
-    const nodeId = nodeData.id;
-    const newHiddenNodes = new Set(hiddenNodes);
-    const newHiddenLinks = new Set(hiddenLinks);
-
-    newHiddenNodes.add(nodeId);
-
-    // Hide connected nodes and links
-    links.forEach((link) => {
-      if (link.source_node === nodeId) {
-        newHiddenNodes.add(link.destination_node);
-        newHiddenLinks.add(link.id);
-      } else if (link.destination_node === nodeId) {
-        newHiddenNodes.add(link.source_node);
-        newHiddenLinks.add(link.id);
+    withUnsavedChangesCheck(() => {
+      if (!selectedElement || selectedElement.type !== "node") {
+        alert("Please select a node to hide.");
+        return;
       }
-    });
 
-    setHiddenNodes(newHiddenNodes);
-    setHiddenLinks(newHiddenLinks);
-    setFilteredNodes(nodes.filter((n) => !newHiddenNodes.has(n.id)));
-    setFilteredLinks(
-      links.filter(
-        (l) =>
-          !newHiddenLinks.has(l.id) &&
-          !newHiddenNodes.has(l.source_node) &&
-          !newHiddenNodes.has(l.destination_node)
-      )
-    );
-    resetAllStates();
+      const nodeData = selectedElement.data as Node;
+      const nodeId = nodeData.id;
+      const newHiddenNodes = new Set(hiddenNodes);
+      const newHiddenLinks = new Set(hiddenLinks);
+
+      newHiddenNodes.add(nodeId);
+
+      // Hide connected nodes and links
+      links.forEach((link) => {
+        if (link.source_node === nodeId) {
+          newHiddenNodes.add(link.destination_node);
+          newHiddenLinks.add(link.id);
+        } else if (link.destination_node === nodeId) {
+          newHiddenNodes.add(link.source_node);
+          newHiddenLinks.add(link.id);
+        }
+      });
+
+      setHiddenNodes(newHiddenNodes);
+      setHiddenLinks(newHiddenLinks);
+      setFilteredNodes(nodes.filter((n) => !newHiddenNodes.has(n.id)));
+      setFilteredLinks(
+        links.filter(
+          (l) =>
+            !newHiddenLinks.has(l.id) &&
+            !newHiddenNodes.has(l.source_node) &&
+            !newHiddenNodes.has(l.destination_node)
+        )
+      );
+      resetAllStates();
+    });
   };
 
   const deleteSelected = () => {
-    if (!selectedElement) {
-      showSnackbar("Select a node or relationship first.", "warning");
-      return;
-    }
+    withUnsavedChangesCheck(() => {
+      if (!selectedElement) {
+        showSnackbar("Select a node or relationship first.", "warning");
+        return;
+      }
 
-    if (selectedElement.type === "node") {
-      const nodeData = selectedElement.data as Node;
-      const id = nodeData.id;
-      const newNodes = nodes.filter((n) => n.id !== id);
-      const newLinks = links.filter(
-        (l) => l.source_node !== id && l.destination_node !== id
-      );
+      if (selectedElement.type === "node") {
+        const nodeData = selectedElement.data as Node;
+        const id = nodeData.id;
+        const newNodes = nodes.filter((n) => n.id !== id);
+        const newLinks = links.filter(
+          (l) => l.source_node !== id && l.destination_node !== id
+        );
 
-      setNodes(newNodes);
-      setLinks(newLinks);
-      setFilteredNodes(newNodes.filter((n) => !hiddenNodes.has(n.id)));
-      setFilteredLinks(
-        newLinks.filter(
-          (l) =>
-            !hiddenLinks.has(l.id) &&
-            !hiddenNodes.has(l.source_node) &&
-            !hiddenNodes.has(l.destination_node)
-        )
-      );
-    } else if (selectedElement.type === "link") {
-      const linkData = selectedElement.data as Link;
-      const id = linkData.id;
-      const newLinks = links.filter((l) => l.id !== id);
+        setNodes(newNodes);
+        setLinks(newLinks);
+        setFilteredNodes(newNodes.filter((n) => !hiddenNodes.has(n.id)));
+        setFilteredLinks(
+          newLinks.filter(
+            (l) =>
+              !hiddenLinks.has(l.id) &&
+              !hiddenNodes.has(l.source_node) &&
+              !hiddenNodes.has(l.destination_node)
+          )
+        );
+      } else if (selectedElement.type === "link") {
+        const linkData = selectedElement.data as Link;
+        const id = linkData.id;
+        const newLinks = links.filter((l) => l.id !== id);
 
-      setLinks(newLinks);
-      setFilteredLinks(
-        newLinks.filter(
-          (l) =>
-            !hiddenLinks.has(l.id) &&
-            !hiddenNodes.has(l.source_node) &&
-            !hiddenNodes.has(l.destination_node)
-        )
-      );
-    }
+        setLinks(newLinks);
+        setFilteredLinks(
+          newLinks.filter(
+            (l) =>
+              !hiddenLinks.has(l.id) &&
+              !hiddenNodes.has(l.source_node) &&
+              !hiddenNodes.has(l.destination_node)
+          )
+        );
+      }
 
-    resetAllStates();
+      resetAllStates();
+    });
   };
 
   const downloadJson = () => {
-    let dataToDownload;
-    
-    if (viewState === "json" && editorContent) {
-      // Use the edited JSON content from Monaco editor
-      try {
-        dataToDownload = JSON.parse(editorContent);
-      } catch (err) {
-        showSnackbar("Invalid JSON in editor. Using graph data instead.", "warning");
+    withUnsavedChangesCheck(() => {
+      let dataToDownload;
+      
+      if (viewState === "json" && editorContent) {
+        // Use the edited JSON content from Monaco editor
+        try {
+          dataToDownload = JSON.parse(editorContent);
+        } catch (err) {
+          showSnackbar("Invalid JSON in editor. Using graph data instead.", "warning");
+          dataToDownload = {
+            nodes: nodes.map((n) => ({
+              id: n.id,
+              type: n.type,
+              code_set: n.code_set || "",
+              code: n.code || "",
+              name: n.name,
+              condition: n.condition || "",
+              reference: n.reference || "",
+              text: n.text || "",
+            })),
+            edges: links.map((l) => ({
+              id: l.id,
+              source_node: l.source_node,
+              destination_node: l.destination_node,
+              edge_name: l.edge_name,
+              reference: l.reference || "",
+              text: l.text || "",
+            })),
+          };
+        }
+      } else {
+        // Use current graph data
         dataToDownload = {
           nodes: nodes.map((n) => ({
             id: n.id,
@@ -382,65 +471,45 @@ const GraphEditor: React.FC<GraphEditorProps> = ({setActive, isNavbar}) => {
           })),
         };
       }
-    } else {
-      // Use current graph data
-      dataToDownload = {
-        nodes: nodes.map((n) => ({
-          id: n.id,
-          type: n.type,
-          code_set: n.code_set || "",
-          code: n.code || "",
-          name: n.name,
-          condition: n.condition || "",
-          reference: n.reference || "",
-          text: n.text || "",
-        })),
-        edges: links.map((l) => ({
-          id: l.id,
-          source_node: l.source_node,
-          destination_node: l.destination_node,
-          edge_name: l.edge_name,
-          reference: l.reference || "",
-          text: l.text || "",
-        })),
-      };
-    }
 
-    if (dataToDownload.nodes.length === 0 && dataToDownload.edges.length === 0) {
-      showSnackbar("No data to download!", "warning");
-      return;
-    }
+      if (dataToDownload.nodes.length === 0 && dataToDownload.edges.length === 0) {
+        showSnackbar("No data to download!", "warning");
+        return;
+      }
 
-    try {
-      const jsonStr = JSON.stringify(dataToDownload, null, 2);
-      const blob = new Blob([jsonStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "graph.json";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showSnackbar("JSON downloaded successfully!", "success");
-    } catch (err) {
-      console.error("Error generating JSON:", err);
-      showSnackbar("Failed to generate JSON. Check console for details.", "error");
-    }
+      try {
+        const jsonStr = JSON.stringify(dataToDownload, null, 2);
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "graph.json";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showSnackbar("JSON downloaded successfully!", "success");
+      } catch (err) {
+        console.error("Error generating JSON:", err);
+        showSnackbar("Failed to generate JSON. Check console for details.", "error");
+      }
+    });
   };
 
   const uploadJson = () => {
-    resetAllStates();
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = (event) => {
-      const target = event.target as HTMLInputElement;
-      if (target.files && target.files[0]) {
-        handleJsonUpload(target.files[0]);
-      }
-    };
-    input.click();
+    withUnsavedChangesCheck(() => {
+      resetAllStates();
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".json";
+      input.onchange = (event) => {
+        const target = event.target as HTMLInputElement;
+        if (target.files && target.files[0]) {
+          handleJsonUpload(target.files[0]);
+        }
+      };
+      input.click();
+    });
   };
 
   const handleJsonUpload = (file: File) => {
@@ -553,24 +622,168 @@ const handleEditJson = () => {
       // Update originalJson to the new saved state
       setOriginalJson(editorContent);
       setHasChanges(false);
-      setIsEditingJson(false);
+      setIsEditingJsonLocal(false); // Only reset on successful validation
       setShowDiffEditor(false);
-      showSnackbar("JSON saved successfully!", "success");
+      
+      // API call to save JSON data
+      handleSaveJsonData(parsedData);
+      
     } catch (err) {
       console.error("Invalid JSON:", err);
       showSnackbar(
         'Invalid JSON format! Please ensure it has "nodes" and "edges" arrays with valid IDs.',
         "error"
       );
+      // DON'T reset isEditingJsonLocal here - keep it as true so button stays "Save Json"
     }
   } else {
     // Enable editing - preserve the original state
     if (!originalJson) {
       setOriginalJson(editorContent);
     }
-    setIsEditingJson(true);
+    setIsEditingJsonLocal(true);
   }
 };
+
+  // New function to handle API call for saving JSON data
+  const handleSaveJsonData = async (jsonData: any) => {
+    // if (!selectedDatabase?.id) {
+    //   showSnackbar("Please select a database first", "warning");
+    //   return;
+    // }
+    // if (!selectedGuideline?.id) {
+    //   showSnackbar("Please select a guideline first", "warning");
+    //   return;
+    // }
+    try {
+      if (!jsonData.nodes || jsonData.nodes.length === 0) {
+        showSnackbar("No graph data available to sync.", "error");
+        return;
+      }
+
+      const processedNodes = jsonData.nodes.map((node: any) => ({
+        id: node.id,
+        type: node.type,
+        code_set: node.code_set || "",
+        code: node.code || "",
+        condition: node.condition || "",
+        reference: node.reference || "",
+        name: node.name,
+        text: node.text || ""
+      }));
+
+      const processedEdges = jsonData.edges.map((link: any) => ({
+        id: link.id,
+        source_node: link.source_node,
+        destination_node: link.destination_node,
+        edge_name: link.edge_name,
+        reference: link.reference || "",
+        text: link.text || ""
+      }));
+
+      const payload = {
+        // guideline_id: selectedGuideline.id,
+        nodes: processedNodes,
+        edges: processedEdges,
+      };
+
+      const result = await fetchApi("/v1/knowledge-map/validate", "POST", payload, selectedDatabase?.id);
+      if (result.success) {
+        showSnackbar("JSON validation updated successfully!", "success");
+        setErrorDrawerData([]);
+        setIsEditingJsonLocal(false);
+        // setGuidelineId(selectedGuideline.id);
+        // setActive("guidelines");
+        // resetAllStates();
+      } else {
+        showSnackbar(`Failed to update database: ${result.message}`, "error");
+      }
+    } catch (error: unknown) {
+      setIsEditingJsonLocal(true);
+      const validationErrors =
+        (error as { validationErrors?: never })?.validationErrors || [];
+      console.log("Error updating database:", error);
+      console.log("Data:", error);
+      setShowDrawer(true);
+      setOpenSideDrawer(true)
+      setErrorDrawerData(validationErrors as never);
+      showSnackbar("The nodes and edges in the given knowledge map are not in the required format. Please check the errors to fix them", "error");
+    } finally {
+      setSaveDataLoading(false);
+    }
+  };
+
+  // Separate function for saving JSON only
+  const handleSaveJson = async () => {
+    if (!selectedDatabase?.id) {
+      showSnackbar("Please select a database first", "warning");
+      return;
+    }
+    
+    if (!editorContent) {
+      showSnackbar("No JSON data to save", "warning");
+      return;
+    }
+
+    try {
+      setSaveJsonLoading(true);
+      
+      // Parse and validate JSON
+      const jsonData = JSON.parse(editorContent);
+      
+      if (!jsonData.nodes || !jsonData.edges) {
+        throw new Error("Invalid JSON structure: missing nodes or edges");
+      }
+
+      // Call the validation API
+      const result = await fetchApi("/v1/knowledge-map/validate", "POST", jsonData, selectedDatabase.id);
+      
+      if (result.success) {
+        showSnackbar("JSON validated and saved successfully!", "success");
+        setErrorDrawerData([]);
+        setHasChanges(false);
+        setOriginalJson(editorContent);
+        
+        // Update graph view with the saved JSON data
+        const newNodes: Node[] = jsonData.nodes.map((n: Node) => ({
+          ...n,
+          x: 0,
+          y: 0,
+          color: getDefaultColor(n.type),
+        }));
+
+        const newLinks: Link[] = jsonData.edges.map((e: Link) => ({
+          id: e.id,
+          source: e.source_node,
+          target: e.destination_node,
+          source_node: e.source_node,
+          destination_node: e.destination_node,
+          edge_name: e.edge_name,
+          reference: e.reference || "",
+          text: e.text || "",
+        }));
+
+        setNodes(newNodes);
+        setLinks(newLinks);
+        setHiddenNodes(new Set());
+        setHiddenLinks(new Set());
+        setFilteredNodes(newNodes);
+        setFilteredLinks(newLinks);
+        
+      } else {
+        showSnackbar(`Failed to save JSON: ${result.message}`, "error");
+      }
+    } catch (error: unknown) {
+      const validationErrors =
+        (error as { validationErrors?: never })?.validationErrors || [];
+      console.log("Error saving JSON:", error);
+      setShowDrawer(true);
+      setErrorDrawerData(validationErrors as never);
+      showSnackbar("The JSON contains validation errors. Please check the errors to fix them", "error");
+    } finally {
+      setSaveJsonLoading(false);
+    }
+  };
 
   // Handle toggle diff editor
 const handleToggleDiffEditor = () => {
@@ -600,34 +813,40 @@ const handleDiffEditorChange = (value: string | undefined) => {
 
   // Exact recenter function from HTML
   const recenter = () => {
-    resetAllStates();
-    if (graphRef.current && graphRef.current.recenter) {
-      graphRef.current.recenter();
-    }
+    withUnsavedChangesCheck(() => {
+      resetAllStates();
+      if (graphRef.current && graphRef.current.recenter) {
+        graphRef.current.recenter();
+      }
+    });
   };
 
   const newGraph = () => {
-    if (window.confirm("Start a new graph? This will clear all current data.")) {
-      setNodes([]);
-      setLinks([]);
-      setFilteredNodes([]);
-      setFilteredLinks([]);
-      setHiddenNodes(new Set());
-      setHiddenLinks(new Set());
-      setEditorContent("");
-      setHasJsonData(false);
-      setOriginalJson("");
-      setIsEditingJson(false);
-      setShowDiffEditor(false);
-      setHasChanges(false);
-      resetAllStates();
-      setShowDrawer(false)
-    }
+    withUnsavedChangesCheck(() => {
+      if (window.confirm("Start a new graph? This will clear all current data.")) {
+        setNodes([]);
+        setLinks([]);
+        setFilteredNodes([]);
+        setFilteredLinks([]);
+        setHiddenNodes(new Set());
+        setHiddenLinks(new Set());
+        setEditorContent("");
+        setHasJsonData(false);
+        setOriginalJson("");
+        setIsEditingJsonLocal(false);
+        setShowDiffEditor(false);
+        setHasChanges(false);
+        resetAllStates();
+        setShowDrawer(false)
+      }
+    });
   };
 
   const addNode = () => {
-    resetAllStates();
-    setAddingNode(true);
+    withUnsavedChangesCheck(() => {
+      resetAllStates();
+      setAddingNode(true);
+    });
   };
 
   const filterGraph = (term: string) => {
@@ -830,8 +1049,10 @@ const handleDiffEditorChange = (value: string | undefined) => {
       label: "Filter",
       icon: <FilterAlt style={{ width: 20, marginRight: 2 }} />,
       onClick: () => {
-        resetAllStates();
-        setShowFilter(true);
+        withUnsavedChangesCheck(() => {
+          resetAllStates();
+          setShowFilter(true);
+        });
       },
     },
     {
@@ -916,83 +1137,86 @@ const handleDiffEditorChange = (value: string | undefined) => {
   ];
 
   const handleSaveData = async () => {
-    if (!selectedDatabase?.id) {
-      showSnackbar("Please select a database first", "warning");
-      return;
-    }
-    if (!selectedGuideline?.id) {
-      showSnackbar("Please select a guideline first", "warning");
-      return;
-    }
-    try {
-      if (!nodes || nodes.length === 0) {
-        showSnackbar("No graph data available to sync.", "error");
+    withUnsavedChangesCheck(async () => {
+      if (!selectedDatabase?.id) {
+        showSnackbar("Please select a database first", "warning");
         return;
       }
-      setSaveDataLoading(true);
-
-      const processedNodes = nodes.map(node => ({
-        id: node.id,
-        type: node.type,
-        code_set: node.code_set || "",
-        code: node.code || "",
-        condition:node.condition || "",
-        reference:node.reference || "",
-        name: node.name,
-        text: node.text || ""
-      }));
-
-      const processedEdges = links.map(link => ({
-        id: link.id,
-        source_node: link.source_node,
-        destination_node: link.destination_node,
-        edge_name: link.edge_name,
-        reference: link.reference || "",
-        text: link.text || ""
-      }));
-
-      const payload = {
-        guideline_id: selectedGuideline.id,
-        nodes: processedNodes,
-        edges: processedEdges,
-      };
-
-      const result = await fetchApi("/v1/knowledge-map/upsert", "POST", payload, selectedDatabase?.id);
-      if (result.success) {
-        showSnackbar("Database synchronized successfully!", "success");
-        setShowDrawer(false);
-        setErrorDrawerData([]);
-        setGuidelineId(selectedGuideline.id);
-        setActive("guidelines");
-        resetAllStates();
-      } else {
-        showSnackbar(`Failed to sync database: ${result.message}`, "error");
+      if (!selectedGuideline?.id) {
+        showSnackbar("Please select a guideline first", "warning");
+        return;
       }
-    } catch (error: unknown) {
-      const validationErrors =
-        (error as { validationErrors?: never })?.validationErrors || [];
-      console.log("Error syncing database:", error);
-      console.log("Data:", error);
-      setShowDrawer(true);
-      setErrorDrawerData(validationErrors as never);
-      showSnackbar("The nodes and edges in the given knowledge map are not in the required format. Please check the errors to fix them", "error");
-    } finally {
-      setSaveDataLoading(false);
-    }
+      try {
+        if (!nodes || nodes.length === 0) {
+          showSnackbar("No graph data available to sync.", "error");
+          return;
+        }
+        setSaveDataLoading(true);
+
+        const processedNodes = nodes.map(node => ({
+          id: node.id,
+          type: node.type,
+          code_set: node.code_set || "",
+          code: node.code || "",
+          condition:node.condition || "",
+          reference:node.reference || "",
+          name: node.name,
+          text: node.text || ""
+        }));
+
+        const processedEdges = links.map(link => ({
+          id: link.id,
+          source_node: link.source_node,
+          destination_node: link.destination_node,
+          edge_name: link.edge_name,
+          reference: link.reference || "",
+          text: link.text || ""
+        }));
+
+        const payload = {
+          guideline_id: selectedGuideline.id,
+          nodes: processedNodes,
+          edges: processedEdges,
+        };
+
+        const result = await fetchApi("/v1/knowledge-map/upsert", "POST", payload, selectedDatabase?.id);
+        if (result.success) {
+          showSnackbar("Database synchronized successfully!", "success");
+          setShowDrawer(false);
+          setErrorDrawerData([]);
+          setGuidelineId(selectedGuideline.id);
+          setActive("guidelines");
+          resetAllStates();
+        } else {
+          showSnackbar(`Failed to sync database: ${result.message}`, "error");
+        }
+      } catch (error: unknown) {
+        const validationErrors =
+          (error as { validationErrors?: never })?.validationErrors || [];
+        console.log("Error syncing database:", error);
+        console.log("Data:", error);
+        setShowDrawer(true);
+        setErrorDrawerData(validationErrors as never);
+        showSnackbar("The nodes and edges in the given knowledge map are not in the required format. Please check the errors to fix them", "error");
+      } finally {
+        setSaveDataLoading(false);
+      }
+    });
   };
 
       const [guidelines, setGuidelines] = useState<Guideline[]>([]);
   const { databases, setDatabases, selectedDatabase, setSelectedDatabase} = useGraphViewer();
 
   const handleDatabaseChange = (event: React.ChangeEvent<{ value: unknown }>) => {
-    setGuidelines([])
-    const value = event.target.value as string;
-    const db = databases.find((d) => d.name === value) || null;
-    if(db){
-      setSelectedDatabase(db);
-      getAndSetGuidelines(db?.id as number);
-    }
-    
+    withUnsavedChangesCheck(() => {
+      setGuidelines([])
+      const value = event.target.value as string;
+      const db = databases.find((d) => d.name === value) || null;
+      if(db){
+        setSelectedDatabase(db);
+        getAndSetGuidelines(db?.id as number);
+      }
+    });
   };  
 
   
@@ -1048,28 +1272,34 @@ const handleDiffEditorChange = (value: string | undefined) => {
       } | undefined>(undefined);
 
   const handleAddGuidelineClick = () => {
-    setEditingGuidelineId(undefined as any);
-    setEditingGuidelineInitial(undefined as any);
-    setShowAddGuidelineForm(true);
+    withUnsavedChangesCheck(() => {
+      setEditingGuidelineId(undefined as any);
+      setEditingGuidelineInitial(undefined as any);
+      setShowAddGuidelineForm(true);
+    });
   };
 
   const handleAddDatabaseClick = () => {
-    setEditingDatabaseId(undefined);
-    setEditingDatabaseInitial(undefined);
-    setShowDatabaseForm(true);
+    withUnsavedChangesCheck(() => {
+      setEditingDatabaseId(undefined);
+      setEditingDatabaseInitial(undefined);
+      setShowDatabaseForm(true);
+    });
   };
 
   const handleEditDatabaseClick = (db: Neo4jDatabase) => {
-    setEditingDatabaseId(db.id);
-    setEditingDatabaseInitial({
-      name: db.name || '',
-      url: db.url || '',
-      username: db.username || '',
-      password: db.password || '',
-      database: db.database || '',
-      description: db.description || '',
+    withUnsavedChangesCheck(() => {
+      setEditingDatabaseId(db.id);
+      setEditingDatabaseInitial({
+        name: db.name || '',
+        url: db.url || '',
+        username: db.username || '',
+        password: db.password || '',
+        database: db.database || '',
+        description: db.description || '',
+      });
+      setShowDatabaseForm(true);
     });
-    setShowDatabaseForm(true);
   };
 
   const handleCreateGuideline = async (
@@ -1121,13 +1351,15 @@ const handleDiffEditorChange = (value: string | undefined) => {
   } | undefined>(undefined);
 
   const handleEditGuidelineClick = (g: Guideline) => {
-    setEditingGuidelineId(g.id);
-    setEditingGuidelineInitial({
-      name: g.name,
-      association: g.association,
-      publication_year: g.publication_year,
+    withUnsavedChangesCheck(() => {
+      setEditingGuidelineId(g.id);
+      setEditingGuidelineInitial({
+        name: g.name,
+        association: g.association,
+        publication_year: g.publication_year,
+      });
+      setShowAddGuidelineForm(true);
     });
-    setShowAddGuidelineForm(true);
   };
 
   const handleUpdateGuideline = async (
@@ -1306,19 +1538,30 @@ const handleDiffEditorChange = (value: string | undefined) => {
   };
 
   const handleChange = (event: React.ChangeEvent<{ value: unknown }>) => {
-    const value = event.target.value as string;
-    const selected = guidelines.find((g) => g.name === value);
-    if (selected) {
-      setSelectedGuideline(selected);
-      // onGuidelineSelect?.(selected || null);
-    } else {
-      setSelectedGuideline(null);
-      // onGuidelineSelect?.(null);
-    }
+    withUnsavedChangesCheck(() => {
+      const value = event.target.value as string;
+      const selected = guidelines.find((g) => g.name === value);
+      if (selected) {
+        setSelectedGuideline(selected);
+        // onGuidelineSelect?.(selected || null);
+      } else {
+        setSelectedGuideline(null);
+        // onGuidelineSelect?.(null);
+      }
+    });
   };
 
   const handleDeleteClick = () => {
-    setDeleteModalOpen(true); // Open modal when delete clicked
+    withUnsavedChangesCheck(() => {
+      setDeleteModalOpen(true); // Open modal when delete clicked
+    });
+  };
+
+  // Handle view state change with unsaved changes check
+  const handleViewStateChange = (newViewState: "graph" | "json") => {
+    withUnsavedChangesCheck(() => {
+      setViewState(newViewState);
+    });
   };
 
 
@@ -1330,6 +1573,74 @@ const handleDiffEditorChange = (value: string | undefined) => {
         severity={snackbar.severity}
         onClose={handleSnackbarClose}
       />
+
+      {/* ---------- UNSAVED CHANGES MODAL ---------- */}
+      {showUnsavedChangesModal && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+          }}
+        >
+          <Box
+            sx={{
+              backgroundColor: 'white',
+              borderRadius: '8px',
+              padding: '24px',
+              width: '400px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            }}
+          >
+            <div style={{display:'flex',width:'100%',justifyContent:'space-between'}}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', marginBottom: '8px' }}>
+              Unsaved Changes
+            </Typography>
+            <span onClick={handleCancelAction} style={{cursor:'pointer'}}><CloseIcon/></span>
+            </div>
+            <Typography variant="body2" sx={{ color: 'text.secondary', marginBottom: '24px' }}>
+              You have unsaved changes in the JSON editor. Do you want to save them before proceeding?
+            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: '12px',width:'100%' }}>
+              <Button
+                onClick={handleDiscardChanges}
+                variant="outlined"
+                sx={{
+                  textTransform: 'none',
+                  borderColor: '#d32f2f',
+                  color: '#d32f2f',
+                  '&:hover': {
+                    backgroundColor: '#ffebee',
+                    borderColor: '#d32f2f',
+                  },
+                }}
+              >
+                Discard
+              </Button>
+              <Button
+                onClick={handleSaveChanges}
+                variant="contained"
+                sx={{
+                  textTransform: 'none',
+                  backgroundColor: '#01205C',
+                  '&:hover': {
+                    backgroundColor: '#001a4a',
+                  },
+                }}
+              >
+                Save Changes
+              </Button>
+            </Box>
+          </Box>
+        </Box>
+      )}
 
       {/* ---------- DELETE MODAL (Guideline only) ---------- */}
       <DeleteModal open={deleteModalOpen} setOpen={setDeleteModalOpen} />
@@ -1564,166 +1875,195 @@ const handleDiffEditorChange = (value: string | undefined) => {
           </Select>}
           </Box>
 
-          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:15,flexDirection: selectedElement ? "column" : "row"}}>
+          {
+            hasJsonData && (
+              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:15,flexDirection: selectedElement ? "column" : "row"}}>
 
-            {/* Graph/JSON toggle buttons */}
-          <div
-          style={{
-            backgroundColor: "#01205C",
-            borderRadius: "5px",
-            padding: 5,
-            height: "35px",
-            display: "flex",
-            alignItems: "center",
-            gap: 5,
-            zIndex: 1111,
-          }}
-        >
-          <Button
-            onClick={() => setViewState("graph")}
-            sx={{
-              backgroundColor: viewState === "graph" ? "white" : "#01205C",
-              color: viewState === "graph" ? "black" : "white",
-              textTransform: "none",
-              px: 2,
-              borderRadius: "8px",
-              height: "35px",
-              "&:hover": {
-                backgroundColor: viewState === "graph" ? "#f5f5f5" : "#01205C",
-                color: viewState === "graph" ? "#01205C" : "white",
-              },
-            }}
-          >
-            Graph
-          </Button>
-
-          <Button
-            onClick={() => setViewState("json")}
-            sx={{
-              backgroundColor: viewState === "json" ? "white" : "#01205C",
-              color: viewState === "json" ? "black" : "white",
-              textTransform: "none",
-              px: 2,
-              borderRadius: "8px",
-              height: "35px",
-              "&:hover": {
-                backgroundColor: viewState === "json" ? "#f5f5f5" : "#01205C",
-                color: viewState === "json" ? "#01205C" : "white",
-              },
-            }}
-          >
-            JSON
-          </Button>
-          </div>
-          {  (filteredLinks.length > 0 || filteredNodes.length > 0) &&
-            <Button
-              onClick={handleSaveData}
-              disabled={saveDataLoading}
-              sx={{
+                {/* Graph/JSON toggle buttons */}
+              <div
+              style={{
                 backgroundColor: "#01205C",
-                color: "white",
-                gap: 1,
-                padding: 1,
-                minWidth:'150px',
-                maxHeight:"40px",
-                textTransform: "none",
-                "&.Mui-disabled": {
-                  backgroundColor: "#01205C",
-                  color: "white",
-                  opacity: 0.7
-                },
-                "&:hover": {
-                  backgroundColor: "#01205C",
-                },
+                borderRadius: "5px",
+                padding: 5,
+                height: "35px",
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
                 zIndex: 1111,
               }}
-              size="small"
             >
-              <SyncIcon style={{ 
-                width: "20px",
-                marginRight: "4px",
-                display: "inline-block",
-                transform: saveDataLoading ? "rotate(360deg)" : "rotate(0deg)",
-                transition: "transform 1s linear",
-                animation: saveDataLoading ? "rotation 1s infinite linear" : "none"
-              }} />
-              <style>
-                {`
-                  @keyframes rotation {
-                    from {
-                      transform: rotate(0deg);
-                    }
-                    to {
-                      transform: rotate(360deg);
-                    }
-                  }
-                `}
-              </style>
-              Save Graph
-            </Button>
+              <Button
+                onClick={() => handleViewStateChange("graph")}
+                sx={{
+                  backgroundColor: viewState === "graph" ? "white" : "#01205C",
+                  color: viewState === "graph" ? "black" : "white",
+                  textTransform: "none",
+                  px: 2,
+                  borderRadius: "8px",
+                  height: "35px",
+                  "&:hover": {
+                    backgroundColor: viewState === "graph" ? "#f5f5f5" : "#01205C",
+                    color: viewState === "graph" ? "#01205C" : "white",
+                  },
+                }}
+              >
+                Graph
+              </Button>
+
+              <Button
+                onClick={() => handleViewStateChange("json")}
+                sx={{
+                  backgroundColor: viewState === "json" ? "white" : "#01205C",
+                  color: viewState === "json" ? "black" : "white",
+                  textTransform: "none",
+                  px: 2,
+                  borderRadius: "8px",
+                  height: "35px",
+                  "&:hover": {
+                    backgroundColor: viewState === "json" ? "#f5f5f5" : "#01205C",
+                    color: viewState === "json" ? "#01205C" : "white",
+                  },
+                }}
+              >
+                JSON
+              </Button>
+              </div>
+              {  (filteredLinks.length > 0 || filteredNodes.length > 0) &&
+                <Button
+                  onClick={handleSaveData}
+                  disabled={saveDataLoading}
+                  sx={{
+                    backgroundColor: "#01205C",
+                    color: "white",
+                    gap: 1,
+                    padding: 1,
+                    minWidth:'150px',
+                    maxHeight:"40px",
+                    textTransform: "none",
+                    "&.Mui-disabled": {
+                      backgroundColor: "#01205C",
+                      color: "white",
+                      opacity: 0.7
+                    },
+                    "&:hover": {
+                      backgroundColor: "#01205C",
+                    },
+                    zIndex: 1111,
+                  }}
+                  size="small"
+                >
+                  <SyncIcon style={{ 
+                    width: "20px",
+                    marginRight: "4px",
+                    display: "inline-block",
+                    transform: saveDataLoading ? "rotate(360deg)" : "rotate(0deg)",
+                    transition: "transform 1s linear",
+                    animation: saveDataLoading ? "rotation 1s infinite linear" : "none"
+                  }} />
+                  <style>
+                    {`
+                      @keyframes rotation {
+                        from {
+                          transform: rotate(0deg);
+                        }
+                        to {
+                          transform: rotate(360deg);
+                        }
+                      }
+                    `}
+                  </style>
+                  Save Graph
+                </Button>
+              }
+            
+              {deleteModalOpen &&
+                <Button
+                  sx={{
+                    backgroundColor: "#fdebeb",
+                    border: "1px solid #e50a0a",
+                    color: "#e50a0a",
+                    gap: 1,
+                    padding: 1,
+                    px: 2,
+                    textTransform: "none",
+                    zIndex:1111,
+                    marginRight:'50px'
+                  }}
+                  size="small"
+                  onClick={handleDeleteClick} // Open delete modal
+                >
+                  <DeleteIcon />
+                  Delete
+                </Button>
+              }
+              </div>
+            )
           }
-        
-          {deleteModalOpen &&
-            <Button
-              sx={{
-                backgroundColor: "#fdebeb",
-                border: "1px solid #e50a0a",
-                color: "#e50a0a",
-                gap: 1,
-                padding: 1,
-                px: 2,
-                textTransform: "none",
-                zIndex:1111,
-                marginRight:'50px'
-              }}
-              size="small"
-              onClick={handleDeleteClick} // Open delete modal
-            >
-              <DeleteIcon />
-              Delete
-            </Button>
-          }
-        </div>
+
           
         </div>
 
 
 
         {/* JSON Tools Side Drawer */}
-        <ErrorModal
-          drawerStyle={{minWidth:"100px", overflow:"hidden", mt:"0px", width:260}}
-          open={openSideDrawer && viewState === "json"}
-          isNavbar={isNavbar}
-          showIcon={false}
-          onClose={() => setOpenSideDrawer(false)}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 2,
-              p:"10px",
-              position:"relative",
-            }}
+          <ErrorModal
+            drawerStyle={{minWidth:"100px", overflow:"hidden", mt:"0px", width:260}}
+            open={openSideDrawer && viewState === "json"}
+            isNavbar={isNavbar}
+            showIcon={false}
+            onClose={() => setOpenSideDrawer(false)}
           >
-            <IconButton sx={{position:"absolute", right:0, top:0}} onClick={() => setOpenSideDrawer(false)}><CloseIcon /></IconButton>
-            <OptionBox 
-              title="JSON Tools" 
-              buttons={[
-                {
-                  label: "Upload JSON",
-                  icon: <Upload style={{ width: 17, marginRight: 2 }} />,
-                  onClick: uploadJson,
-                },
-                {
-                  label: "Download JSON",
-                  icon: <FileDownload style={{ width: 17, marginRight: 2 }} />,
-                  onClick: downloadJson,
-                }
-              ]} 
-            />
-          </Box>
-        </ErrorModal>
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+                p:"10px",
+                position:"relative",
+              }}
+            >
+              <IconButton sx={{position:"absolute", right:0, top:0}} onClick={() => setOpenSideDrawer(false)}>
+                <CloseIcon />
+              </IconButton>
+              
+              {/* Error Button - Only show when there are errors */}
+              {errorDrawerData.length > 0 && (
+                <OptionBox 
+                  title="Validation" 
+                  buttons={[
+                    {
+                      label: `Errors (${errorDrawerData.length})`,
+                      icon: <WarningIcon style={{ width: 15, marginRight: 2 }} />,
+                      onClick: () => setShowErrorComponent(true),
+                      sx: {
+                        borderColor: "#e50a0a",
+                        py: 1.5,
+                        backgroundColor: "#fdebeb",
+                        color: "#e50a0a",
+                        gap: 0.5,
+                      },
+                    }
+                  ]} 
+                />
+              )}
+              
+              <OptionBox 
+                title="JSON Tools" 
+                buttons={[
+                  {
+                    label: "Upload JSON",
+                    icon: <Upload style={{ width: 17, marginRight: 2 }} />,
+                    onClick: uploadJson,
+                  },
+                  {
+                    label: "Download JSON",
+                    icon: <FileDownload style={{ width: 17, marginRight: 2 }} />,
+                    onClick: downloadJson,
+                  }
+                ]} 
+              />
+            </Box>
+          </ErrorModal>
 
           <Box
             onClick={() => setOpenSideDrawer(true)}
@@ -1870,7 +2210,7 @@ const handleDiffEditorChange = (value: string | undefined) => {
                 <Button
                   onClick={handleEditJson}
                   sx={{
-                    backgroundColor: isEditingJson ? "#4CAF50" : "#ffffff",
+                    backgroundColor: isEditingJson ? "#01205c" : "#ffffff",
                     color: isEditingJson ? "#ffffff" : "#000000",
                     border: isEditingJson ? "none" : "none",
                     textTransform: "none",
@@ -1880,7 +2220,7 @@ const handleDiffEditorChange = (value: string | undefined) => {
                     minWidth: 'auto',
                     borderRadius: '6px',
                     "&:hover": {
-                      backgroundColor: isEditingJson ? "#45a049" : "#ffffff",
+                      backgroundColor: isEditingJson ? "#01205c" : "#ffffff",
                       opacity: 0.9,
                     },
                   }}
@@ -2019,6 +2359,13 @@ const handleDiffEditorChange = (value: string | undefined) => {
                       formatOnType: true,
                       tabSize: 2,
                       readOnly: !isEditingJson, // Only allow editing when isEditingJson is true
+                      scrollbar: {
+                        verticalScrollbarSize: 30, 
+                        horizontalScrollbarSize: 10, 
+                        useShadows: false,
+                        verticalHasArrows: false,
+                        horizontalHasArrows: false,
+                      },
                     }}
                   />
                 )}
