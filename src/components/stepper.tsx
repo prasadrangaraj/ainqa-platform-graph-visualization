@@ -42,7 +42,6 @@ function CustomStepIcon(props: StepIconProps) {
         color: active ? "#ffffff" : "#555E68",
         fontSize: "14px",
         fontWeight: 600,
-        paddingBottom: "2px",
       }}
     >
       {icon}
@@ -96,10 +95,11 @@ export const StepperNavigation: React.FC<StepperNavigationProps> = ({
           fontWeight: 500,
           px: 2,
           color: "#3C4759",
-          borderColor: "#D0D8E3",
-          "&:hover": { borderColor: "#AEB8C8" },
+          "&:hover": { border:'none' },
           gap: 1,
           fontSize: "16px",
+          bgcolor:'#EDF1F5',
+          border:'none'
         }}
       >
         <LeftArrowIcon /> Previous
